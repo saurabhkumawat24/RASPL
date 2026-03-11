@@ -16,6 +16,7 @@ import '../main.dart';
 import '../util/appImage.dart';
 import 'Chatpage.dart';
 import 'CloseChat.dart';
+import 'ProductPage.dart';
 
 enum LeadView {
   active,
@@ -328,11 +329,14 @@ class _CategoryListScreenState extends State<CategoryListScreen> with RouteAware
             ),
           ),
           onPressed: () {
-              setState(() {
-                currentView = LeadView.create; // 🔥 Active & Closed unselect
-                // showProductList = true;
-                //isActive = false;
-              });
+            Get.to(
+                  () => Productpage(
+
+              ),
+              transition: Transition.rightToLeft, // animation type
+              duration: const Duration(milliseconds: 400), // animation time
+              curve: Curves.easeInOut,
+            );
 
           },
           child: const Text(
@@ -396,339 +400,67 @@ class _CategoryListScreenState extends State<CategoryListScreen> with RouteAware
 
 
   Widget _ProductCategoryList(ThemeData theme) {
-    return Obx(() {
-      if (authController.isProductLoading) {
-        return const Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFF2e448d),
-          ),
-        );
-      }
+    return GetBuilder<AuthController>(
+      builder: (authController) {
 
-      final products = authController.filteredProducts;
+        if (authController.isProductLoading) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFF2e448d),
+            ),
+          );
+        }
 
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
+        final products = authController.filteredProducts;
 
-            // ===================
-            // SEARCH FIELD
-            // ===================
-            TextField(
-              onChanged: (value) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
+        return Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+
+              /// 🔍 SEARCH
+              TextField(
+                onChanged: (value) {
                   authController.filterProducts(value);
-                });
                 },
-              decoration: InputDecoration(
-                hintText: "Search by Name",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.grey.withOpacity(0.1),
-                contentPadding:
-                const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 12),
-                border: OutlineInputBorder(
-                  borderRadius:
-                  BorderRadius.circular(15),
-                  borderSide: BorderSide.none,
+                decoration: InputDecoration(
+                  hintText: "Search by Name",
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: Colors.grey.withOpacity(0.1),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
 
-            // ===================
-            // PRODUCT LIST
-            // ===================
-            Expanded(
-              child: products.isEmpty
-                  ? const Center(
-                child: Text("No Products Found"),
-              )
-                  : ListView.separated(
-                itemCount: products.length,
-                separatorBuilder: (_, __) =>
-                const SizedBox(height: 10),
-                itemBuilder: (context, index) {
-                  final ChatController chatController = Get.find<
-                      ChatController>();
+              /// 📦 PRODUCT LIST
+              Expanded(
+                child: products.isEmpty
+                    ? const Center(child: Text("No Products Found"))
+                    : ListView.builder(
+                  itemCount: products.length,
+                  itemBuilder: (context, index) {
 
-                  final product =
-                  products[index];
+                    final product = products[index];
 
-                  return Column(
-                    children: [
+                    return ListTile(
+                      title: Text(product.productName ?? ""),
+                      subtitle: Text(product.leadID ?? ""),
+                    );
 
-                      InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        /*
-                                          onTap: () {
-                                            //Get.to(
-                                              // WhatsAppChatPage(
-                                              //   tittle:  Product.productName.toString(),
-                                              // ),
-
-                                            // 🟢 Safe Get.to call with proper null checks
-                                            final int safeLeadId = int.tryParse(Product.fKOpenLeadID?.toString() ?? "") ?? 0;
-                                            final int safeProductId = int.tryParse(Product.pKID?.toString() ?? "") ?? 0;
-
-                                  // ✅ Safe extraction of companyId and agentId
-
-
-                                            final int safeCompanyId = (authController.loginResponse?.data?.isNotEmpty ?? false)
-                                                ? authController.loginResponse!.data![0].fKCompanyID ?? 0
-                                                : 0;
-
-                                            final int safeAgentId = (authController.loginResponse?.data?.isNotEmpty ?? false)
-                                                ? authController.loginResponse!.data![0].pKUserID ?? 0
-                                                : 0;
-                                            final loginData = authController.loginResponse?.data?[0];
-
-                                  // Safe IDs
-                                            final int companyId = loginData?.fKCompanyID ?? 0;  // 1
-                                            final int agentId = loginData?.pKUserID ?? 0;       // 226
-                                  // 🔹 Debug prints before navigation
-                                            debugPrint("leadID = '${Product.leadID}'");
-                                            debugPrint("fKOpenLeadID = '${Product.fKOpenLeadID}'");
-                                            debugPrint("pKID = '${Product.pKID}'");
-
-                                            debugPrint("companyId: $safeCompanyId");
-                                            debugPrint("agentId: $safeAgentId");
-                                            debugPrint("leadId: $safeLeadId");
-                                            debugPrint("productId: $safeProductId");
-
-                                  // 🟢 Navigation
-                                            Get.to(
-                                                  () => WhatsAppChatPage(
-                                                title: Product.productName.toString(),
-                                                leadId: int.tryParse(Product.fKOpenLeadID?.toString() ?? "") ?? 0,
-                                                companyId: companyId,
-                                                agentId: agentId,
-                                                productId: int.tryParse(Product.pKID?.toString() ?? "") ?? 0,
-                                              ),
-                                              transition: Transition.rightToLeft,
-                                              duration: const Duration(milliseconds: 400),
-                                              curve: Curves.easeInOut,
-                                            );
-
-                                            print("🚀 companyId: $companyId, agentId: $agentId");
-
-                                          },
-                                  */
-                        onTap: () => navigateToChats(product),
-
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 🔹 Left Icon / Avatar
-
-                            const SizedBox(width: 14),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                CircleAvatar(
-                                  radius: 25,
-                                  backgroundColor: Colors.grey.shade200,
-                                  backgroundImage: product.iconURL.toString() !=
-                                      null && product.iconURL!.isNotEmpty
-                                      ? NetworkImage(product.iconURL.toString())
-                                      : AssetImage(
-                                      AppImage.Background) as ImageProvider,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded( // 🔥 MOST IMPORTANT
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment
-                                        .start,
-                                    children: [
-                                      Text(
-                                        product.productName.toString(),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.titleMedium
-                                            ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                            fontFamily: FontFamily.roboto
-
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        product.productName.toString(),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.titleMedium
-                                            ?.copyWith(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w400,
-                                            color: Colors.black54,
-                                            height: 1.3,
-                                            fontFamily: FontFamily.roboto
-
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                const SizedBox(width: 8),
-
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    // Text(
-                                    //   product.leadID.toString(),
-                                    //   style: theme.textTheme.titleMedium
-                                    //       ?.copyWith(
-                                    //       fontSize: 15,
-                                    //       color: Colors.grey,
-                                    //       fontFamily: FontFamily.roboto
-                                    //
-                                    //   ),
-                                    // ),
-
-                                  //  const SizedBox(height: 4),
-
-                                    // Obx(() => chatController.dashboardUnreadCount.value > 0
-                                    //     ? Container(
-                                    //   padding: EdgeInsets.all(6),
-                                    //   decoration: BoxDecoration(
-                                    //     color: Colors.red,
-                                    //     shape: BoxShape.circle,
-                                    //   ),
-                                    //   child: Text(
-                                    //     chatController.dashboardUnreadCount.value.toString(),
-                                    //     style: TextStyle(color: Colors.white),
-                                    //   ),
-                                    // )
-                                    //     : SizedBox())
-                                    /// Product unread count
-                                    // if ((product.unReadCount ?? 0) > 0)
-                                    //   CircleAvatar(
-                                    //     radius: 12,
-                                    //     backgroundColor: Colors.red,
-                                    //     child: Text(
-                                    //       (product.unReadCount ?? 0) > 99
-                                    //           ? "99+"
-                                    //           : product.unReadCount.toString(),
-                                    //       style: const TextStyle(
-                                    //         fontSize: 11,
-                                    //         color: Colors.white,
-                                    //         fontWeight: FontWeight.bold,
-                                    //       ),
-                                    //     ),
-                                    //   ),
-                                    // Obx(() {
-                                    //   final auth = Get.find<AuthController>();
-                                    //
-                                    //   return Text(
-                                    //     auth.dashboardUnreadCount.value.toString(),
-                                    //     style: TextStyle(fontSize: 18, color: Colors.red),
-                                    //   );
-                                    // })
-                                    // if ((product.unReadCount ?? 0) > 0)
-                                    //   CircleAvatar(
-                                    //     radius: 12,
-                                    //     backgroundColor: Colors.red,
-                                    //     child: Text(
-                                    //       (product.unReadCount ?? 0) > 99
-                                    //           ? "0+"
-                                    //           : product.unReadCount.toString(),
-                                    //       style: const TextStyle(
-                                    //         fontSize: 11,
-                                    //         color: Colors.white,
-                                    //         fontWeight: FontWeight.bold,
-                                    //       ),
-                                    //     ),
-                                    //   ),
-                                    //     CircleAvatar(
-                                    //     radius: 11,
-                                    //     backgroundColor: const Color(0xFF5a6bb6),
-                                    //     child:  Text(product.unReadCount.toString(),
-                                    //       style: TextStyle(
-                                    //         fontSize: 10,
-                                    //         color: Colors.white,
-                                    //         fontWeight: FontWeight.w600,
-                                    //       ),
-                                    //     ),
-                                    //   ),
-                                  ],
-                                ),
-                              ],
-                            )
-
-                            //const Icon(Icons.arrow_forward_ios, size: 16),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 65),
-                        // 50 radius + 15 spacing
-                        child: const Divider(
-                          thickness: 0.5,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  );
-
-                  InkWell(
-                    borderRadius:
-                    BorderRadius.circular(12),
-                    onTap: () {
-                      // navigateToChat(product);
-                    },
-                    child: Container(
-                      padding:
-                      const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius:
-                        BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey
-                                .withOpacity(0.1),
-                            blurRadius: 6,
-                          )
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                        children: [
-
-                          Text(
-                            product.productName ??
-                                "No Name",
-                            style: theme
-                                .textTheme.titleMedium,
-                          ),
-
-                          const SizedBox(height: 4),
-
-                          Text(
-                            "Lead ID: ${product.leadID ?? "-"}",
-                            style: theme
-                                .textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-      );
-    },
+            ],
+          ),
+        );
+      },
     );
   }
-
 
 
 
@@ -1272,6 +1004,216 @@ class _CategoryListScreenState extends State<CategoryListScreen> with RouteAware
   //     );
   //   });
   // }
+
+  // Widget _activeCategoryList(ThemeData theme) {
+  //   //final AuthController authController = Get.find<AuthController>();
+  //
+  //   return Obx(() {
+  //     authController.searchTrigger.value;
+  //
+  //     if (authController.isLoadings1.value) {
+  //       return const Center(child: CircularProgressIndicator());
+  //     }
+  //     if (authController.originalLeadLists==null) {
+  //       return Center(child: const Text("No Active Leads Found"));
+  //     }
+  //
+  //     /// 🔥 STEP 1: Base list
+  //     List<LeadItem> list = authController.originalLeadLists;
+  //
+  //     /// 🔥 STEP 2: Active filter
+  //     list = list.where((lead) =>
+  //     lead.leadStatus == "Open" ||
+  //         lead.leadStatus == "Pending"
+  //     ).toList();
+  //
+  //     /// 🔥 STEP 3: Search filter
+  //     final search = searchController.text.trim().toLowerCase();
+  //     if (search.isNotEmpty) {
+  //       list = list.where((lead) {
+  //         return (lead.leadId ?? "").toLowerCase().contains(search) ||
+  //             (lead.productName ?? "").toLowerCase().contains(search);
+  //       }).toList();
+  //     }
+  //
+  //     /// 🔥 STEP 4: Sorting
+  //     if (selectedFilter == "date") {
+  //       list.sort((a, b) =>
+  //           (b.creationDate ?? DateTime(0))
+  //               .compareTo(a.creationDate ?? DateTime(0)));
+  //     } else if (selectedFilter == "id") {
+  //       list.sort((a, b) =>
+  //           (a.leadId ?? "").compareTo(b.leadId ?? ""));
+  //     } else if (selectedFilter == "product") {
+  //       list.sort((a, b) =>
+  //           (a.productName ?? "").compareTo(b.productName ?? ""));
+  //     }
+  //
+  //     return Column(
+  //       children: [
+  //         /// 🔍 SEARCH
+  //         TextField(
+  //           controller: searchController,
+  //           onChanged: (_) => authController.searchTrigger.value++,
+  //           decoration: InputDecoration(
+  //             hintText: "Search by Product / Lead ID",
+  //             prefixIcon: const Icon(Icons.search),
+  //             filled: true,
+  //             fillColor: Colors.grey.withOpacity(0.1),
+  //             border: OutlineInputBorder(
+  //               borderRadius: BorderRadius.circular(15),
+  //               borderSide: BorderSide.none,
+  //             ),
+  //           ),
+  //         ),
+  //
+  //         const SizedBox(height: 15),
+  //
+  //         /// 📄 LIST
+  //         Expanded(
+  //           child: ListView.separated(
+  //             itemCount: list.length,
+  //             separatorBuilder: (_, __) => const SizedBox(height: 10),
+  //             itemBuilder: (context, index) {
+  //               final tickets = list[index];
+  //
+  //               final ChatController chatController = Get.find<ChatController>();
+  //               //final ticket = filteredTickets[index];
+  //
+  //
+  //               return  Column(
+  //                 children: [
+  //                   InkWell(
+  //                     borderRadius: BorderRadius.circular(12),
+  //                     onTap: () => navigateToChat(tickets),
+  //
+  //                     child: Column(
+  //                       crossAxisAlignment: CrossAxisAlignment.start,
+  //                       children: [
+  //                         // 🔹 Left Icon / Avatar
+  //
+  //                         const SizedBox(width: 14),
+  //                         Row(
+  //                           crossAxisAlignment: CrossAxisAlignment.center,
+  //                           children: [
+  //                             CircleAvatar(
+  //                               radius: 25,
+  //                               backgroundColor: Colors.grey.shade200,
+  //                               backgroundImage: tickets.iconUrl.toString() != null && tickets.iconUrl!.isNotEmpty
+  //                                   ? NetworkImage("${tickets.iconUrl}",)
+  //                                   :  AssetImage(AppImage.Background,) as ImageProvider,
+  //                             ),
+  //                             const SizedBox(width: 12),
+  //                             Expanded( // 🔥 MOST IMPORTANT
+  //                               child: Column(
+  //                                 crossAxisAlignment: CrossAxisAlignment.start,
+  //                                 children: [
+  //                                   Text(
+  //                                     tickets.productName.toString(),
+  //                                     maxLines: 1,
+  //                                     overflow: TextOverflow.ellipsis,
+  //                                     style: theme.textTheme.titleMedium?.copyWith(
+  //                                         fontWeight: FontWeight.w600,
+  //                                         fontFamily: FontFamily.roboto
+  //
+  //                                     ),
+  //                                   ),
+  //                                   const SizedBox(height: 4),
+  //                                   Text(
+  //                                     tickets.leadId.toString(),
+  //                                     maxLines: 2,
+  //                                     overflow: TextOverflow.ellipsis,
+  //                                     style: theme.textTheme.titleMedium?.copyWith(
+  //                                         fontSize: 16,
+  //                                         fontWeight: FontWeight.w400,
+  //                                         color: Colors.black54,
+  //                                         height: 1.3,
+  //                                         fontFamily: FontFamily.roboto
+  //
+  //                                     ),
+  //                                   ),
+  //                                 ],
+  //                               ),
+  //                             ),
+  //
+  //                             const SizedBox(width: 8),
+  //
+  //                             Column(
+  //                               crossAxisAlignment: CrossAxisAlignment.end,
+  //                               children: [
+  //                                 // if ((tickets.unReadUserCount ?? 0) > 0)
+  //                                 //   CircleAvatar(
+  //                                 //     radius: 12,
+  //                                 //     backgroundColor: Colors.red,
+  //                                 //     child: Text(
+  //                                 //       (tickets.unReadUserCount ?? 0) > 99
+  //                                 //           ? "0+"
+  //                                 //           : tickets.unReadUserCount.toString(),
+  //                                 //       style: const TextStyle(
+  //                                 //         fontSize: 11,
+  //                                 //         color: Colors.white,
+  //                                 //         fontWeight: FontWeight.bold,
+  //                                 //       ),
+  //                                 //     ),
+  //                                 //   ),
+  //                                 if ((tickets.unReadUserCount ?? 0) > 0)
+  //                                   CircleAvatar(
+  //                                     radius: 12,
+  //                                     backgroundColor: Colors.red,
+  //                                     child: Text(
+  //                                       (tickets.unReadUserCount ?? 0) > 99
+  //                                           ? "99+"
+  //                                           : tickets.unReadUserCount.toString(),
+  //                                       style: const TextStyle(
+  //                                         fontSize: 11,
+  //                                         color: Colors.white,
+  //                                         fontWeight: FontWeight.bold,
+  //                                       ),
+  //                                     ),
+  //                                   ),
+  //
+  //                                 const SizedBox(height: 4),
+  //
+  //                                 Text(
+  //                                   DateFormat("dd MMM yyyy hh:mm a")
+  //                                       .format(DateTime.parse(tickets.assignDate.toString())),
+  //                                   style: theme.textTheme.titleMedium?.copyWith(
+  //                                     fontSize: 10,
+  //                                     color: Colors.grey,
+  //                                     fontFamily: FontFamily.roboto,
+  //                                   ),
+  //                                 ),
+  //                               ],
+  //                             ),
+  //                           ],
+  //                         )
+  //
+  //                         //const Icon(Icons.arrow_forward_ios, size: 16),
+  //                       ],
+  //                     ),
+  //                   ),
+  //                   Padding(
+  //                     padding: const EdgeInsets.only(left: 65), // 50 radius + 15 spacing
+  //                     child: const Divider(
+  //                       thickness: 0.5,
+  //                       color: Colors.grey,
+  //                     ),
+  //                   ),
+  //
+  //                 ],
+  //               );
+  //
+  //             },
+  //           ),
+  //
+  //
+  //         ),
+  //         _bottomFixedButton(),
+  //
+  //       ],
+  //     );
+  //   });
+  // }
   Widget _activeCategoryList(ThemeData theme) {
     //final AuthController authController = Get.find<AuthController>();
 
@@ -1408,13 +1350,28 @@ class _CategoryListScreenState extends State<CategoryListScreen> with RouteAware
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
+                                  // if ((tickets.unReadUserCount ?? 0) > 0)
+                                  //   CircleAvatar(
+                                  //     radius: 12,
+                                  //     backgroundColor: Colors.red,
+                                  //     child: Text(
+                                  //       (tickets.unReadUserCount ?? 0) > 99
+                                  //           ? "0+"
+                                  //           : tickets.unReadUserCount.toString(),
+                                  //       style: const TextStyle(
+                                  //         fontSize: 11,
+                                  //         color: Colors.white,
+                                  //         fontWeight: FontWeight.bold,
+                                  //       ),
+                                  //     ),
+                                  //   ),
                                   if ((tickets.unReadUserCount ?? 0) > 0)
                                     CircleAvatar(
                                       radius: 12,
                                       backgroundColor: Colors.red,
                                       child: Text(
                                         (tickets.unReadUserCount ?? 0) > 99
-                                            ? "0+"
+                                            ? "99+"
                                             : tickets.unReadUserCount.toString(),
                                         style: const TextStyle(
                                           fontSize: 11,
@@ -1423,15 +1380,6 @@ class _CategoryListScreenState extends State<CategoryListScreen> with RouteAware
                                         ),
                                       ),
                                     ),
-                                  // Text(
-                                  //   ticket.leadId.toString(),
-                                  //   style: theme.textTheme.titleMedium?.copyWith(
-                                  //       fontSize: 15,
-                                  //       color: Colors.grey,
-                                  //       fontFamily: FontFamily.roboto
-                                  //
-                                  //   ),
-                                  // ),
 
                                   const SizedBox(height: 4),
 
@@ -1475,6 +1423,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> with RouteAware
       );
     });
   }
+
   Widget _closedTicketList(ThemeData theme) {
     //final AuthController authController = Get.find<AuthController>();
 
@@ -1610,21 +1559,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> with RouteAware
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  if ((tickets.unReadUserCount ?? 0) > 0)
-                                    CircleAvatar(
-                                                                                          radius: 12,
-                                                                                          backgroundColor: Colors.red,
-                                                                                          child: Text(
-                                                                                            (tickets.unReadUserCount ?? 0) > 99
-                                                                                                ? "0+"
-                                                                                                : tickets.unReadUserCount.toString(),
-                                                                                            style: const TextStyle(
-                                                                                              fontSize: 11,
-                                                                                              color: Colors.white,
-                                                                                              fontWeight: FontWeight.bold,
-                                                                                            ),
-                                                                                          ),
-                                                                                        ),
+
                                   // Text(
                                   //   ticket.leadId.toString(),
                                   //   style: theme.textTheme.titleMedium?.copyWith(

@@ -211,6 +211,9 @@
 //
 // }
 //import 'package:firebase_messaging/firebase_messaging.dart';
+
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -221,39 +224,35 @@ import '../util/custom_snackbar.dart';
 
 class Loginpage extends StatefulWidget {
   const Loginpage({super.key});
-
   @override
   State<Loginpage> createState() => _LoginpageState();
 }
 
 class _LoginpageState extends State<Loginpage> {
   bool agree = true;
-
   final TextEditingController usernameController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-
   final AuthController authController = Get.find<AuthController>();
+
   @override
   String? deviceToken;
   bool tokenReady = false;
   void initState() {
     super.initState();
-   // getDeviceToken();
+    getDeviceToken();
   }
+  Future<void> getDeviceToken() async {
+    await FirebaseMessaging.instance.requestPermission();
 
-  // Future<void> getDeviceToken() async {
-  //   await FirebaseMessaging.instance.requestPermission();
-  //
-  //   String? token = await FirebaseMessaging.instance.getToken();
-  //
-  //   if (token != null && token.isNotEmpty) {
-  //     deviceToken = token;
-  //     tokenReady = true;
-  //     setState(() {});
-  //     print("FCM TOKEN = $deviceToken");
-  //   }
-  // }
+    String? token = await FirebaseMessaging.instance.getToken();
 
+    if (token != null && token.isNotEmpty) {
+      deviceToken = token;
+      tokenReady = true;
+      setState(() {});
+      print("FCM TOKEN = $deviceToken");
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -335,7 +334,7 @@ class _LoginpageState extends State<Loginpage> {
                             ),
                             const Expanded(
                               child: Text(
-                                "I agree to the processing of Personal data",
+                                "By continuing, I agree to the Terms & Conditions.",
                                 style: TextStyle(fontSize: 12),
                               ),
                             ),
@@ -363,7 +362,7 @@ class _LoginpageState extends State<Loginpage> {
                               authController.loginFunction(
                                 loginId: usernameController.text.trim(),
                                 password: passwordController.text.trim(),
-                                deviceToken: deviceToken??"44544455", // FCM later
+                                deviceToken: deviceToken??"", // FCM later
                               );
                             },
                             style: ElevatedButton.styleFrom(

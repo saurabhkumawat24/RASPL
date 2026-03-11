@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../Controller/authController.dart';
 import '../Controller/chatController.dart';
 import '../api/api.dart';
@@ -95,6 +98,35 @@ class _ClosechatState extends State<Closechat> {
     super.dispose();
   }
   @override
+
+  Future<void> _openLink(LinkableElement link) async {
+    final Uri url = Uri.parse(link.url);
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication, // browser open karega
+      );
+    }
+  }
+  void copyMessage(String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    Get.snackbar(
+      "Copied",
+      "Message copied",
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+  Future<void> openUrl(String url) async {
+    final Uri uri = Uri.parse(url);
+
+    if (!await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    )) {
+      throw Exception('Could not launch $url');
+    }
+  }
   // Future<void> pickCameraImage() async {
   //   final XFile? image = await _picker.pickImage(source: ImageSource.camera);
   //   if (image != null) addFileMessage(image.path, "image", true);
@@ -411,27 +443,13 @@ class _ClosechatState extends State<Closechat> {
 
                         final String msgText =
                             m["MsgText"]?.toString() ?? "";
-                        final String fileName =
-                            m["OriginalFileName"]?.toString() ?? "";
-                        final String msgDate =
-                            m["MsgDate"]?.toString() ?? "";
+                        final String fileName = m["OriginalFileName"]?.toString() ?? "";
+                        final String msgDate = m["MsgDate"]?.toString() ?? "";
 
-                        final bool isLastFromSender =
-                            i == chat.messages.length - 1 ||
-                                chat.messages[i + 1]["FromUserType"] != fromType;
-
+                        final bool isLastFromSender = i == chat.messages.length - 1 || chat.messages[i + 1]["FromUserType"] != fromType;
                         final String fileUrl = (m["FileName"] ?? "").toString();
-
-                        final String extension =
-                        fileUrl.contains(".")
-                            ? fileUrl.split('.').last.toLowerCase()
-                            : "";
-
-                        final bool isImage =
-                            extension == "jpg" ||
-                                extension == "jpeg" ||
-                                extension == "png" ||
-                                extension == "webp";
+                        final String extension = fileUrl.contains(".") ? fileUrl.split('.').last.toLowerCase() : "";
+                        final bool isImage = extension == "jpg" || extension == "jpeg" || extension == "png" || extension == "webp";
                         print("ALL MESSAGES: ${chat.messages}");
                         print("SINGLE MESSAGE: ${chat.messages[i]}");
                         return Align(
@@ -458,122 +476,166 @@ class _ClosechatState extends State<Closechat> {
                                   crossAxisAlignment:
                                   CrossAxisAlignment.start,
                                   children: [
+                                    // if (msgType == "TEXT")
+                                    //   Text(
+                                    //     msgText,
+                                    //     style: const TextStyle(
+                                    //       fontSize: 16,
+                                    //       fontWeight: FontWeight.w500,
+                                    //       color: Colors.black, // 👈 force visible
+                                    //     ),
+                                    //   )
                                     if (msgType == "TEXT")
-                                      Text(
-                                        msgText,
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.black, // 👈 force visible
+                                      GestureDetector(
+                                        onTap: () {
+                                          if (msgText.contains("http")) {
+                                            openUrl(msgText); // link open
+                                          }
+                                        },
+                                        onLongPress: () {
+                                          Clipboard.setData(ClipboardData(text: msgText));
+
+                                          // Get.snackbar(
+                                          //   "Copied",
+                                          //   "Message copied",
+                                          //   snackPosition: SnackPosition.BOTTOM,
+                                          //   duration: Duration(seconds: 2),
+                                          // );
+                                        },
+                                        child: Text(
+                                          msgText,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w500,
+                                            color: msgText.contains("http")
+                                                ? Colors.blue
+                                                : Colors.black,
+                                            decoration: msgText.contains("http")
+                                                ? TextDecoration.underline
+                                                : TextDecoration.none,
+                                          ),
                                         ),
                                       )
-                                    //
-                                    // if (msgType == "FILE")
-                                    // const Text(
-                                    // "📎 File Attachment",
-                                    // style: TextStyle(color: Colors.black),
-                                    // ),
-
 
                                     else if (msgType == "FILE")
-                                     if (isImage)
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(10),
-                                          child: InkWell(
-                                            onTap: () {
-                                              /// 🔍 Full screen preview
-                                              // Get.dialog(
-                                              //   Scaffold(
-                                              //     backgroundColor: Colors.black,
-                                              //     body: SafeArea(
-                                              //       child: Stack(
-                                              //         children: [
-                                              //
-                                              //           /// 🔍 Zoomable Image
-                                              //           Center(
-                                              //             child: InteractiveViewer(
-                                              //               minScale: 0.8,
-                                              //               maxScale: 4,
-                                              //               child: Image.network(
-                                              //                 fileUrl,
-                                              //                 fit: BoxFit.contain,
-                                              //                 errorBuilder: (_, __, ___) => const Icon(
-                                              //                   Icons.broken_image,
-                                              //                   color: Colors.white,
-                                              //                   size: 60,
-                                              //                 ),
-                                              //               ),
-                                              //             ),
-                                              //           ),
-                                              //
-                                              //           /// ❌ Close Button
-                                              //           Positioned(
-                                              //             top: 10,
-                                              //             right: 10,
-                                              //             child: InkWell(
-                                              //               onTap: () => Get.back(),
-                                              //               child: Container(
-                                              //                 padding: const EdgeInsets.all(8),
-                                              //                 decoration: BoxDecoration(
-                                              //                   color: Colors.black.withOpacity(0.6),
-                                              //                   shape: BoxShape.circle,
-                                              //                 ),
-                                              //                 child: const Icon(
-                                              //                   Icons.close,
-                                              //                   color: Colors.white,
-                                              //                   size: 26,
-                                              //                 ),
-                                              //               ),
-                                              //             ),
-                                              //           ),
-                                              //
-                                              //         ],
-                                              //       ),
-                                              //     ),
-                                              //   ),
-                                              //   barrierColor: Colors.black87,
-                                              //   barrierDismissible: true, // 👈 outside tap se bhi close hoga
-                                              // );
-                                              //
-                                              Get.dialog(
-                                                Scaffold(
-                                                  backgroundColor: Colors.black,
-                                                  body: SafeArea(
-                                                    child: Stack(
-                                                      children: [
+                                      if (isImage)
+                                        Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            GestureDetector(
+                                              onTap: () {
 
-                                                        /// 🔍 Zoomable Image
-                                                        Center(
-                                                          child: InteractiveViewer(
-                                                            minScale: 0.8,
-                                                            maxScale: 4,
-                                                            child: Image.network(
-                                                              fileUrl,
-                                                              fit: BoxFit.contain,
-                                                              errorBuilder: (_, __, ___) => const Icon(
-                                                                Icons.broken_image,
+                                                /// 🔹 Collect all image messages
+                                                final imageMessages = chat.messages.where((msg) {
+                                                  final savedFile = msg["SavedFileName"] ?? "";
+                                                  final fileUrl = (msg["FileURL"] ?? msg["FileName"] ?? "").toString();
+
+                                                  final ext = savedFile.toString().contains(".")
+                                                      ? savedFile.toString().split(".").last.toLowerCase()
+                                                      : fileUrl.contains(".")
+                                                      ? fileUrl.split(".").last.toLowerCase()
+                                                      : "";
+
+                                                  return ["jpg","jpeg","png","gif","webp"].contains(ext);
+                                                }).toList();
+                                                final startIndex =
+                                                imageMessages.indexWhere((img) => img["PKID"] == m["PKID"]);
+
+                                                PageController pageController =
+                                                PageController(initialPage: startIndex);
+
+                                                RxInt currentIndex = startIndex.obs;
+                                                RxDouble rotationAngle = 0.0.obs;
+
+                                                Get.dialog(
+                                                  Scaffold(
+                                                    backgroundColor: Colors.black,
+                                                    body: SafeArea(
+                                                      child: Stack(
+                                                        children: [
+                                                          Center(
+                                                            child: PageView.builder(
+                                                              controller: pageController,
+                                                              itemCount: imageMessages.length,
+                                                              onPageChanged: (i) {
+                                                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                                                  currentIndex.value = i;
+                                                                  rotationAngle.value = 0;
+                                                                });
+                                                              },
+                                                              itemBuilder: (_, index) {
+                                                                final img = imageMessages[index];
+                                                                final url = (img["FileURL"] ?? img["FileName"]).toString();
+
+                                                                return InteractiveViewer(
+                                                                  minScale: 0.8,
+                                                                  maxScale: 4,
+                                                                  child: Obx(() => Transform.rotate(
+                                                                    angle: rotationAngle.value,
+                                                                    child: Image.network(
+                                                                      url,
+                                                                      fit: BoxFit.contain,
+                                                                      errorBuilder: (_, __, ___) => const Icon(
+                                                                        Icons.broken_image,
+                                                                        color: Colors.white,
+                                                                        size: 60,
+                                                                      ),
+                                                                    ),
+                                                                  )),
+                                                                );
+                                                              },
+                                                            ),
+                                                          ),
+                                                          Positioned(
+                                                            top: 12,
+                                                            left: 20,
+                                                            child: Obx(() => Text(
+                                                              "${currentIndex.value + 1} / ${imageMessages.length}",
+                                                              style: const TextStyle(
                                                                 color: Colors.white,
-                                                                size: 60,
+                                                                fontSize: 16,
+                                                                fontWeight: FontWeight.w500,
+                                                              ),
+                                                            )),
+                                                          ),
+                                                          Positioned(
+                                                            top: 10,
+                                                            right: 110,
+                                                            child: InkWell(
+                                                              onTap: () {
+                                                                rotationAngle.value += 1.57; // rotate 90 degree
+                                                              },
+                                                              child: Container(
+                                                                padding: const EdgeInsets.all(8),
+                                                                decoration: BoxDecoration(
+                                                                  color: Colors.black.withOpacity(0.6),
+                                                                  shape: BoxShape.circle,
+                                                                ),
+                                                                child: const Icon(
+                                                                  Icons.rotate_right,
+                                                                  color: Colors.white,
+                                                                  size: 26,
+                                                                ),
                                                               ),
                                                             ),
                                                           ),
-                                                        ),
-
-                                                        /// ❌ Close Button
-                                                        Positioned(
+                                                          Positioned(
                                                             top: 10,
                                                             right: 60,
-                                                            child:Obx(() {
-                                                              // Check if this message is being downloaded
-                                                              bool isDownloading = chat.downloadingMsgId.value == m["PKID"];
+                                                            child: Obx(() {
+                                                              bool isDownloading = chat.downloadingMsgId.value ==
+                                                                  imageMessages[currentIndex.value]["PKID"];
 
                                                               return InkWell(
                                                                 onTap: isDownloading
-                                                                    ? null // disable button while downloading
+                                                                    ? null
                                                                     : () async {
                                                                   await chat.downloadAndOpenFile(
-                                                                    pkMsgId: m["PKID"],
+                                                                    pkMsgId:
+                                                                    imageMessages[currentIndex.value]["PKID"],
                                                                     companyId: widget.companyId,
+                                                                    fileName: imageMessages[currentIndex.value]
+                                                                    ["OriginalFileName"],
                                                                   );
                                                                 },
                                                                 child: Container(
@@ -583,11 +645,10 @@ class _ClosechatState extends State<Closechat> {
                                                                     shape: BoxShape.circle,
                                                                   ),
                                                                   child: isDownloading
-                                                                      ? SizedBox(
+                                                                      ? const SizedBox(
                                                                     width: 26,
                                                                     height: 26,
                                                                     child: CircularProgressIndicator(
-                                                                      //value: chat.downloadProgress.value,
                                                                       strokeWidth: 2.5,
                                                                       color: Colors.white,
                                                                     ),
@@ -599,186 +660,194 @@ class _ClosechatState extends State<Closechat> {
                                                                   ),
                                                                 ),
                                                               );
-                                                            })
-                                                        ),
-                                                        Positioned(
-                                                          top: 10,
-                                                          right: 10,
-                                                          child: InkWell(
-                                                            onTap: () => Get.back(),
-                                                            child: Container(
-                                                              padding: const EdgeInsets.all(8),
-                                                              decoration: BoxDecoration(
-                                                                color: Colors.black.withOpacity(0.6),
-                                                                shape: BoxShape.circle,
-                                                              ),
-                                                              child: const Icon(
-                                                                Icons.close,
-                                                                color: Colors.white,
-                                                                size: 26,
+                                                            }),
+                                                          ),
+                                                          Positioned(
+                                                            top: 10,
+                                                            right: 10,
+                                                            child: InkWell(
+                                                              onTap: () => Get.back(),
+                                                              child: Container(
+                                                                padding: const EdgeInsets.all(8),
+                                                                decoration: BoxDecoration(
+                                                                  color: Colors.black.withOpacity(0.6),
+                                                                  shape: BoxShape.circle,
+                                                                ),
+                                                                child: const Icon(
+                                                                  Icons.close,
+                                                                  color: Colors.white,
+                                                                  size: 26,
+                                                                ),
                                                               ),
                                                             ),
                                                           ),
-                                                        ),
-
-                                                      ],
+                                                        ],
+                                                      ),
                                                     ),
                                                   ),
+                                                  barrierColor: Colors.black87,
+                                                  barrierDismissible: true,
+                                                );                                              },
+
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(12),
+                                                child: Image.network(
+                                                  fileUrl,
+                                                  height: 180,
+                                                  width: 180,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, __, ___) =>
+                                                  const Icon(Icons.broken_image, size: 80),
                                                 ),
-                                                barrierColor: Colors.black87,
-                                                barrierDismissible: true, // 👈 outside tap se bhi close hoga
-                                              );
-
-                                            },
-                                            child: Image.network(
-                                              fileUrl,
-                                              width: 220,
-                                              height: 220,
-                                              fit: BoxFit.cover,
-                                              loadingBuilder: (_, child, progress) {
-                                                if (progress == null) return child;
-                                                return const SizedBox(
-                                                  width: 200,
-                                                  height: 200,
-                                                  child: Center(
-                                                    child: CircularProgressIndicator(
-                                                      color: Color(0xFF2e448d),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              errorBuilder: (_, __, ___) => Container(
-                                                width: 200,
-                                                height: 200,
-                                                color: Colors.grey.shade300,
-                                                child: const Icon(Icons.broken_image, size: 40),
                                               ),
                                             ),
-                                          ),
+
+                                            Obx(() {
+                                              final isDownloading =
+                                                  chat.downloadingMsgId.value == m["PKID"];
+                                              if (!isDownloading) return const SizedBox.shrink();
+
+                                              return Container(
+                                                height: 180,
+                                                width: 180,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black45,
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: const Center(
+                                                  child: CircularProgressIndicator(
+                                                    color: Colors.white,
+                                                  ),
+                                                ),
+                                              );
+                                            }),
+                                          ],
                                         )
-                                     else Row(
-                                       mainAxisSize: MainAxisSize.min,
-                                       children: [
-                                         const Icon(
-                                           Icons.insert_drive_file,
-                                           color: Color(0xFF2e448d),
-                                         ),
-                                         const SizedBox(width: 6),
-                                         Flexible(
-                                           child: Text(
-                                             fileName.isNotEmpty ? fileName : "File",
-                                             style: const TextStyle(
-                                               color: Colors.black,
-                                               fontWeight: FontWeight.w500,
-                                             ),
-                                             overflow: TextOverflow.ellipsis,
-                                           ),
-                                         ),
-                                         const SizedBox(width: 6),
-                                         Obx(() {
-                                           // Check if this file is being downloaded
-                                           final isDownloading =
-                                               chat.downloadingMsgId.value.toString() == m["PKID"]?.toString();
+                                      else InkWell(
+                                        onTap: () async {
+                                          final isDownloading =
+                                              chat.downloadingMsgId.value.toString() == m["PKID"]?.toString();
 
-                                           return InkWell(
-                                             onTap: isDownloading
-                                                 ? null // Disable button while downloading
-                                                 : () async {
-                                               await chat.downloadAndOpenFile(
-                                                 pkMsgId: m["PKID"],
-                                                 companyId: widget.companyId,
-                                               );
-                                             },
-                                             child: Container(
-                                               width: 26,
-                                               height: 26,
-                                               alignment: Alignment.center,
-                                               child: isDownloading
-                                                   ? const SizedBox(
-                                                 width: 20,
-                                                 height: 20,
-                                                 child: CircularProgressIndicator(
-                                                   strokeWidth: 2.5,
-                                                   color: Color(0xFF2e448d),
-                                                 ),
-                                               )
-                                                   : const Icon(
-                                                 Icons.download,
-                                                 color: Color(0xFF2e448d),
-                                                 size: 26,
-                                               ),
-                                             ),
-                                           );
-                                         }),
-                                       ],
-                                     )
-                                      //  Row(
-                                      //   mainAxisSize: MainAxisSize.min,
-                                      //   children: [
-                                      //     const Icon(Icons.insert_drive_file, color: Color(0xFF2e448d)),
-                                      //     const SizedBox(width: 6),
-                                      //
-                                      //     /// File Name
-                                      //     Flexible(
-                                      //       child: Text(
-                                      //         (m["OriginalFileName"] != null &&
-                                      //             m["OriginalFileName"].toString().isNotEmpty)
-                                      //             ? m["OriginalFileName"].toString()
-                                      //             : "File",
-                                      //         style: const TextStyle(
-                                      //           color: Colors.black,
-                                      //           fontWeight: FontWeight.w500,
-                                      //         ),
-                                      //         overflow: TextOverflow.ellipsis,
-                                      //       ),
-                                      //     ),
-                                      //
-                                      //     const SizedBox(width: 6),
-                                      //
-                                      //     /// Download Button
-                                      //     //  InkWell(
-                                      //     //  onTap: () async {
-                                      //     //    print(m["PKID"]);
-                                      //     //    print(widget.companyId);
-                                      //     //  await chat.downloadAndOpenFile(
-                                      //     //  pkMsgId: m["PKID"],
-                                      //     //  companyId: widget.companyId, // 👈 apna companyId daalo
-                                      //     //
-                                      //     //  );
-                                      //     // // openImage(filePath);
-                                      //     //  },
-                                      //     //  child: const Icon(Icons.download, color: Color(0xFF2e448d)),
-                                      //     //  ),
-                                      //     Obx(() => InkWell(
-                                      //       onTap: chat.downloadingMsgId.value == m["PKID"]
-                                      //           ? null
-                                      //           : () async {
-                                      //         await chat.downloadAndOpenFile(
-                                      //           pkMsgId: m["PKID"],
-                                      //           companyId: widget.companyId,
-                                      //         );
-                                      //       },
-                                      //       child: chat.downloadingMsgId.value == m["PKID"]
-                                      //           ? const SizedBox(
-                                      //         height: 18,
-                                      //         width: 18,
-                                      //         child: CircularProgressIndicator(
-                                      //           strokeWidth: 2,
-                                      //           color: Color(0xFF2e448d),
-                                      //         ),
-                                      //       )
-                                      //           : const Icon(
-                                      //         Icons.download,
-                                      //         color: Color(0xFF2e448d),
-                                      //       ),
-                                      //     )
-                                      //
-                                      //     )
-                                      //   ],
-                                      // ),
+                                          if (!isDownloading) {
+                                            await chat.downloadAndOpenFile(
+                                              pkMsgId: m["PKID"],
+                                              companyId: widget.companyId,
+                                              fileName: m["OriginalFileName"],
 
-                                    else
-                                     const SizedBox(height: 4),
+                                            );
+                                          }
+                                        },
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(
+                                              Icons.insert_drive_file,
+                                              color: Color(0xFF2e448d),
+                                            ),
+                                            const SizedBox(width: 6),
+
+                                            /// File Name
+                                            Flexible(
+                                              child: Text(
+                                                fileName.isNotEmpty ? fileName : "File",
+                                                style: const TextStyle(
+                                                  color: Colors.black,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+
+                                            const SizedBox(width: 6),
+
+                                            Obx(() {
+                                              final isDownloading =
+                                                  chat.downloadingMsgId.value.toString() == m["PKID"]?.toString();
+
+                                              return Container(
+                                                  width: 26,
+                                                  height: 26,
+                                                  alignment: Alignment.center,
+                                                  child: isDownloading
+                                                      ? const SizedBox(
+                                                    width: 20,
+                                                    height: 20,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2.5,
+                                                      color: Color(0xFF2e448d),
+                                                    ),
+                                                  )
+                                                      : SizedBox()
+                                              );
+                                            }),
+                                          ],
+                                        ),
+                                      )
+                                    //  Row(
+                                    //   mainAxisSize: MainAxisSize.min,
+                                    //   children: [
+                                    //     const Icon(Icons.insert_drive_file, color: Color(0xFF2e448d)),
+                                    //     const SizedBox(width: 6),
+                                    //
+                                    //     /// File Name
+                                    //     Flexible(
+                                    //       child: Text(
+                                    //         (m["OriginalFileName"] != null &&
+                                    //             m["OriginalFileName"].toString().isNotEmpty)
+                                    //             ? m["OriginalFileName"].toString()
+                                    //             : "File",
+                                    //         style: const TextStyle(
+                                    //           color: Colors.black,
+                                    //           fontWeight: FontWeight.w500,
+                                    //         ),
+                                    //         overflow: TextOverflow.ellipsis,
+                                    //       ),
+                                    //     ),
+                                    //
+                                    //     const SizedBox(width: 6),
+                                    //
+                                    //     /// Download Button
+                                    //     //  InkWell(
+                                    //     //  onTap: () async {
+                                    //     //    print(m["PKID"]);
+                                    //     //    print(widget.companyId);
+                                    //     //  await chat.downloadAndOpenFile(
+                                    //     //  pkMsgId: m["PKID"],
+                                    //     //  companyId: widget.companyId, // 👈 apna companyId daalo
+                                    //     //
+                                    //     //  );
+                                    //     // // openImage(filePath);
+                                    //     //  },
+                                    //     //  child: const Icon(Icons.download, color: Color(0xFF2e448d)),
+                                    //     //  ),
+                                    //     Obx(() => InkWell(
+                                    //       onTap: chat.downloadingMsgId.value == m["PKID"]
+                                    //           ? null
+                                    //           : () async {
+                                    //         await chat.downloadAndOpenFile(
+                                    //           pkMsgId: m["PKID"],
+                                    //           companyId: widget.companyId,
+                                    //         );
+                                    //       },
+                                    //       child: chat.downloadingMsgId.value == m["PKID"]
+                                    //           ? const SizedBox(
+                                    //         height: 18,
+                                    //         width: 18,
+                                    //         child: CircularProgressIndicator(
+                                    //           strokeWidth: 2,
+                                    //           color: Color(0xFF2e448d),
+                                    //         ),
+                                    //       )
+                                    //           : const Icon(
+                                    //         Icons.download,
+                                    //         color: Color(0xFF2e448d),
+                                    //       ),
+                                    //     )
+                                    //
+                                    //     )
+                                    //   ],
+                                    // ),
+                                    else const SizedBox(height: 4),
 
                                     Text(
                                       msgDate,

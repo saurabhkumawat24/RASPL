@@ -12,6 +12,8 @@ import '../Controller/authController.dart';
 import '../services/signalr_service.dart';
 import '../util/appColor.dart';
 import '../util/appImage.dart';
+import 'About.dart';
+import 'Terms.dart';
 
 class Profile extends StatefulWidget {
   const Profile({super.key});
@@ -175,20 +177,20 @@ class _ProfileState extends State<Profile> {
                   ),
                   child: Column(
                     children: [
-                      settingItem(
-                        icon: Icons.edit,
-                        title: "Update Profile",
-                        onTap: () {
-                          //Get.to(() => UpdateProfileScreen());
-                        },
-                      ),
-                      Divider(),
+                      // settingItem(
+                      //   icon: Icons.edit,
+                      //   title: "Update Profile",
+                      //   onTap: () {
+                      //     //Get.to(() => UpdateProfileScreen());
+                      //   },
+                      // ),
+                      // Divider(),
 
                       settingItem(
                         icon: Icons.info_outline,
                         title: "About Us",
                         onTap: () {
-                          //Get.to(() => AboutUsScreen());
+                          Get.to(() => AboutPage());
                         },
                       ),
                       Divider(),
@@ -197,7 +199,7 @@ class _ProfileState extends State<Profile> {
                         icon: Icons.privacy_tip_outlined,
                         title: "Privacy Policy",
                         onTap: () {
-                         // Get.to(() => PrivacyPolicyScreen());
+                          Get.to(() => TermsConditionsPage());
                         },
                       ),
                       Divider(),

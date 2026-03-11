@@ -26,7 +26,8 @@ import '../api/api.dart';
 
 class ChatController extends GetxController {
   final ChatRepo repo = ChatRepo();
-
+  final ScrollController scrollCtrl = ScrollController();
+  HubConnection? hubConnection;
   RxList<Map<String, dynamic>> messagess = <Map<String, dynamic>>[].obs;
   RxBool sendings = false.obs;
   //RxBool loading = false.obs;
@@ -52,7 +53,8 @@ class ChatController extends GetxController {
     required int companyId,
     required int agentId,
     required int productId,
-  }) async {
+  })
+  async {
     fkLeadID = leadId;
     fkCompanyID = companyId;
     fkAgentID = agentId;
@@ -413,10 +415,10 @@ class ChatController extends GetxController {
         }
 
         // 🔵 UNREAD COUNT
-        if (method == "ReceiveUnreadCount" && args is List && args.isNotEmpty) {
-          dashboardUnreadCount.value = int.tryParse(args[0].toString()) ?? 0;
-          print("🔵 Unread Count Updated: ${dashboardUnreadCount.value}");
-        }
+        // if (method == "ReceiveUnreadCount" && args is List && args.isNotEmpty) {
+        //   dashboardUnreadCount.value = int.tryParse(args[0].toString()) ?? 0;
+        //   print("🔵 Unread Count Updated: ${dashboardUnreadCount.value}");
+        // }
       }
 
       if (shouldRefresh) messages.refresh();
@@ -433,13 +435,28 @@ class ChatController extends GetxController {
     required int leadId,
     required int agentId,
     required int productId,
-  }) async {
+  })
+  async {
+
     try {
+
       final file = File(filePath);
+
+      print("📁 FILE PATH: $filePath");
+
+      if (!file.existsSync()) {
+        print("❌ File does not exist");
+        return;
+      }
+
       final fileName = file.path.split('/').last;
+
+      print("📁 FILE NAME: $fileName");
+      print("📁 FILE SIZE (KB): ${file.lengthSync() / 1024}");
+
       final uniqueId = generateTempUniqueId(fileName);
 
-      // 🔹 Temp message for UI
+      /// 🔹 TEMP MESSAGE FOR UI
       final tempMessage = {
         "PKID": 0,
         "UniqueID": uniqueId,
@@ -454,9 +471,16 @@ class ChatController extends GetxController {
       messages.add(tempMessage);
       messages.refresh();
 
-      // Convert to Base64
+      /// 🔹 READ FILE
       final bytes = await file.readAsBytes();
+
+      print("📦 FILE BYTES LENGTH: ${bytes.length}");
+
+      /// 🔹 BASE64
       final base64File = base64Encode(bytes);
+
+      print("📦 BASE64 LENGTH: ${base64File.length}");
+
       final payload = {
         "FKCompanyID": companyId,
         "FKLeadID": leadId,
@@ -465,55 +489,168 @@ class ChatController extends GetxController {
         "OriginalFileName": fileName,
         "Base64File": base64File,
       };
-      print("📤 Sending File API Payload: ${jsonEncode(payload)}");
+
+      print("📤 API URL: https://chatapi.partnersras.com/api/SendFileMessage");
+
+      print("📤 PAYLOAD:");
+      print(jsonEncode(payload));
+
+      /// 🔹 API CALL
       final response = await http.post(
         Uri.parse("https://chatapi.partnersras.com/api/SendFileMessage"),
         headers: {
           "ApiToken": "1497-63919e5460b9d-476578",
           "Content-Type": "application/json",
         },
-        body: jsonEncode({
-          "FKCompanyID": companyId,
-          "FKLeadID": leadId,
-          "FKAgentID": agentId,
-          "FKProductID": productId,
-          "OriginalFileName": fileName,
-          "Base64File": base64File,
-        }),
+        body: jsonEncode(payload),
       );
-      print("📤 Sending File API Payload: ${jsonEncode(payload)}");
+
+      print("📥 RESPONSE STATUS: ${response.statusCode}");
+      print("📥 RESPONSE BODY: ${response.body}");
+
       if (response.statusCode == 200) {
+
         final decoded = jsonDecode(response.body);
+
         final realMsg = decoded["Data"]?[0];
 
         if (realMsg != null) {
-          final String savedFile = realMsg["SavedFileName"] ?? "";
-          String fileUrl = buildFileUrl(realMsg["FileURL"] ?? "", savedFile);
 
-          // 🔹 Update temp message
-          int index = messages.indexWhere((m) => m["UniqueID"] == uniqueId);
+          final String savedFile = realMsg["SavedFileName"] ?? "";
+
+          String fileUrl =
+          buildFileUrl(realMsg["FileURL"] ?? "", savedFile);
+
+          /// 🔹 UPDATE TEMP MESSAGE
+          int index =
+          messages.indexWhere((m) => m["UniqueID"] == uniqueId);
+
           if (index != -1) {
+
             messages[index] = {
               ...messages[index],
               "PKID": realMsg["PKID"] ?? 0,
               "SavedFileName": savedFile,
               "FileURL": fileUrl,
               "isUploading": false,
-              "MsgDate": realMsg["MsgDate"] ?? DateTime.now().toIso8601String(),
+              "MsgDate": realMsg["MsgDate"] ??
+                  DateTime.now().toIso8601String(),
             };
+
             messages.refresh();
           }
+
+          print("✅ FILE UPLOAD SUCCESS");
+
         }
+
       } else {
-        // ❌ Remove temp if failed
+
+        print("❌ UPLOAD FAILED");
+
         messages.removeWhere((m) => m["UniqueID"] == uniqueId);
         messages.refresh();
+
+        Get.snackbar("Error", "File upload failed");
+
       }
+
     } catch (e) {
-      print("Upload Error: $e");
+
+      print("🚨 UPLOAD ERROR: $e");
+
       Get.snackbar("Error", "File upload failed");
+
     }
   }
+//   Future<void> sendFileMultipart({
+//     required String filePath,
+//     required int companyId,
+//     required int leadId,
+//     required int agentId,
+//     required int productId,
+//   })
+//   async {
+//     try {
+//       final file = File(filePath);
+//       final fileName = file.path.split('/').last;
+//       final uniqueId = generateTempUniqueId(fileName);
+//
+//       // 🔹 Temp message for UI
+//       final tempMessage = {
+//         "PKID": 0,
+//         "UniqueID": uniqueId,
+//         "MsgType": "FILE",
+//         "OriginalFileName": fileName,
+//         "filePath": filePath,
+//         "isUploading": true,
+//         "FromUserType": "F",
+//         "MsgDate": DateTime.now().toIso8601String(),
+//       };
+//
+//       messages.add(tempMessage);
+//       messages.refresh();
+//
+//       // Convert to Base64
+//       final bytes = await file.readAsBytes();
+//       final base64File = base64Encode(bytes);
+//       final payload = {
+//         "FKCompanyID": companyId,
+//         "FKLeadID": leadId,
+//         "FKAgentID": agentId,
+//         "FKProductID": productId,
+//         "OriginalFileName": fileName,
+//         "Base64File": base64File,
+//       };
+//       print("📤 Sending File API Payload: ${jsonEncode(payload)}");
+//       final response = await http.post(
+//         Uri.parse("https://chatapi.partnersras.com/api/SendFileMessage"),
+//         headers: {
+//           "ApiToken": "1497-63919e5460b9d-476578",
+//           "Content-Type": "application/json",
+//         },
+//         body: jsonEncode({
+//           "FKCompanyID": companyId,
+//           "FKLeadID": leadId,
+//           "FKAgentID": agentId,
+//           "FKProductID": productId,
+//           "OriginalFileName": fileName,
+//           "Base64File": base64File,
+//         }),
+//       );
+//       print("📤 Sending File API Payload: ${jsonEncode(payload)}");
+//       if (response.statusCode == 200) {
+//         final decoded = jsonDecode(response.body);
+//         final realMsg = decoded["Data"]?[0];
+//         Get.snackbar("Error", "File upload");
+//         if (realMsg != null) {
+//           final String savedFile = realMsg["SavedFileName"] ?? "";
+//           String fileUrl = buildFileUrl(realMsg["FileURL"] ?? "", savedFile);
+//
+//           // 🔹 Update temp message
+//           int index = messages.indexWhere((m) => m["UniqueID"] == uniqueId);
+//           if (index != -1) {
+//             messages[index] = {
+//               ...messages[index],
+//               "PKID": realMsg["PKID"] ?? 0,
+//               "SavedFileName": savedFile,
+//               "FileURL": fileUrl,
+//               "isUploading": false,
+//               "MsgDate": realMsg["MsgDate"] ?? DateTime.now().toIso8601String(),
+//             };
+//             messages.refresh();
+//           }
+//         }
+//       } else {
+//         // ❌ Remove temp if failed
+//         messages.removeWhere((m) => m["UniqueID"] == uniqueId);
+//         messages.refresh();
+//       }
+//     } catch (e) {
+//       print("Upload Error: $e");
+//       Get.snackbar("Error", "File upload failed");
+//     }
+//   }
 
   Future<void> joinTicketGroup(int ticketId) async {
     if (!connected.value || _socket == null) return;
@@ -530,15 +667,200 @@ class ChatController extends GetxController {
     print("✅ Joined Group: $ticketId");
   }
 
+  // Future<void> sendMessage({
+  //   required int companyId,
+  //   required int leadId,
+  //   required int agentId,
+  //   required int productId,
+  //   required String text,
+  // }) async {
+  //
+  //   if (text.trim().isEmpty) return;
+  //
+  //   final uniqueId = generateTempUniqueId("text");
+  //
+  //   /// 🔹 TEMP MESSAGE FOR UI
+  //   final tempMessage = {
+  //     "PKID": 0,
+  //     "UniqueID": uniqueId,
+  //     "MsgType": "TEXT",
+  //     "TextMessage": text,
+  //     "isSending": true,
+  //     "FromUserType": "F",
+  //     "MsgDate": DateTime.now().toIso8601String(),
+  //   };
+  //
+  //   messages.add(tempMessage);
+  //   messages.refresh();
+  //
+  //   try {
+  //
+  //     final Map<String, dynamic> response = await repo.sendText(
+  //       companyId: companyId,
+  //       leadId: leadId,
+  //       agentId: agentId,
+  //       productId: productId,
+  //       text: text,
+  //     );
+  //
+  //     /// 🔹 FIND TEMP MESSAGE
+  //     int index = messages.indexWhere((m) => m["UniqueID"] == uniqueId);
+  //
+  //     if (index != -1) {
+  //       messages[index] = {
+  //         ...messages[index],
+  //         "PKID": response['PKID'] ?? 0, // <- change here
+  //         "isSending": false,
+  //         "MsgDate": DateTime.now().toIso8601String(),
+  //       };
+  //
+  //       messages.refresh();
+  //     }
+  //
+  //   } catch (e) {
+  //
+  //     /// ❌ FAIL
+  //     messages.removeWhere((m) => m["UniqueID"] == uniqueId);
+  //     messages.refresh();
+  //
+  //     Get.snackbar("Error", "Message send failed");
+  //   }
+  // }
 
-
+  // Future<void> sendMessage({
+  //   required int companyId,
+  //   required int leadId,
+  //   required int agentId,
+  //   required int productId,
+  //   required String text,
+  //   // socket callback for broadcasting
+  //   Function(Map<String,dynamic>)? onMessageSent,
+  // })
+  // async {
+  //   if (text.trim().isEmpty) return;
+  //
+  //   final uniqueId = generateTempUniqueId("text");
+  //
+  //   /// 🔹 TEMP MESSAGE FOR UI
+  //   final tempMessage = {
+  //     "PKID": 0,
+  //     "UniqueID": uniqueId,
+  //     "MsgType": "TEXT",
+  //     "TextMessage": text,
+  //     "isSending": true,
+  //     "FromUserType": "F",
+  //     "MsgDate": DateTime.now().toIso8601String(),
+  //   };
+  //
+  //   messages.add(tempMessage);
+  //   messages.refresh();
+  //   scrollToBottom();
+  //
+  //   try {
+  //     final Map<String, dynamic> response = await repo.sendText(
+  //       companyId: companyId,
+  //       leadId: leadId,
+  //       agentId: agentId,
+  //       productId: productId,
+  //       text: text,
+  //     );
+  //
+  //     /// 🔹 Update temp message
+  //     int index = messages.indexWhere((m) => m["UniqueID"] == uniqueId);
+  //     if (index != -1) {
+  //       messages[index] = {
+  //         ...messages[index],
+  //         "PKID": response['PKID'] ?? 0,
+  //         "MsgText": text,
+  //         "isSending": false,
+  //         "MsgDate": DateTime.now().toIso8601String(),
+  //       };
+  //       messages.refresh();
+  //       //scrollToBottom();
+  //     }
+  //
+  //     /// 🔹 Callback to notify server socket / broadcast
+  //     if(onMessageSent != null) onMessageSent(messages[index]);
+  //
+  //   } catch (e) {
+  //     messages.removeWhere((m) => m["UniqueID"] == uniqueId);
+  //     messages.refresh();
+  //     Get.snackbar("Error", "Message send failed");
+  //   }
+  // }
+  // Future<void> sendMessage({
+  //   required int companyId,
+  //   required int leadId,
+  //   required int agentId,
+  //   required int productId,
+  //   required String text,
+  // }) async {
+  //   if (text.trim().isEmpty || isSending.value) return;
+  //
+  //   final uniqueId = DateTime.now().millisecondsSinceEpoch.toString();
+  //
+  //   // 🔹 TEMP MESSAGE FOR UI
+  //   final tempMessage = {
+  //     "PKID": 0,
+  //     "UniqueID": uniqueId,
+  //     "MsgType": "TEXT",
+  //     "TextMessage": text,
+  //     "isSending": true,       // mark sending
+  //     "FromUserType": "F",
+  //     "MsgDate": DateTime.now().toIso8601String(),
+  //   };
+  //
+  //   messages.add(tempMessage); // add temp message to chat
+  //   messages.refresh();
+  //
+  //   scrollToBottom(); // scroll if you want
+  //
+  //   isSending.value = true;
+  //
+  //   try {
+  //     // 🔹 API call
+  //     final Map<String, dynamic> response = await repo.sendText(
+  //       companyId: companyId,
+  //       leadId: leadId,
+  //       agentId: agentId,
+  //       productId: productId,
+  //       text: text,
+  //     );
+  //
+  //     // 🔹 Update temp message
+  //     final index = messages.indexWhere((m) => m["UniqueID"] == uniqueId);
+  //     if (index != -1) {
+  //       // Replace the whole map
+  //       messages[index] = {
+  //         ...messages[index],
+  //         "PKID": response['PKID'] ?? 0,
+  //         "MsgText": text,
+  //         "isSending": false,
+  //         "MsgDate": DateTime.now().toIso8601String(),
+  //       };
+  //
+  //       // 🔹 Notify GetX about the update
+  //       messages.refresh();  // important
+  //       scrollToBottom();
+  //     }
+  //
+  //   } catch (e) {
+  //     // ❌ Remove temp message on fail
+  //     messages.removeWhere((m) => m["UniqueID"] == uniqueId);
+  //     messages.refresh();
+  //     Get.snackbar("Error", "Message send failed");
+  //   } finally {
+  //     isSending.value = false;
+  //   }
+ // }
   Future<void> sendMessage({
     required int companyId,
     required int leadId,
     required int agentId,
     required int productId,
     required String text,
-  }) async {
+  })
+  async {
     if (isSending.value || text.trim().isEmpty) return;
 
     isSending.value = true;
@@ -569,7 +891,8 @@ class ChatController extends GetxController {
     required int agentId,
     required int productId,
     required String text,
-  }) async {
+  })
+  async {
 
     if (isSending.value || text.trim().isEmpty) return;
 
@@ -751,8 +1074,8 @@ class ChatController extends GetxController {
   Future<void> downloadAndOpenFile({
     required int pkMsgId,
     required int companyId,
-  })
-  async {
+    required String fileName,
+  }) async {
     try {
       downloadingMsgId.value = pkMsgId;
 
@@ -760,28 +1083,30 @@ class ChatController extends GetxController {
           "https://chatapi.partnersras.com/api/DownloadFile"
           "?PKMsgID=$pkMsgId&FKCompanyID=$companyId";
 
-      print("Download URL: $fileUrl");
-
-      final prefs = await SharedPreferences.getInstance();
-      final apiToken = prefs.getString("ApiToken") ?? "";
-
       final dir = await getApplicationDocumentsDirectory();
-
-      final fileName = "file_$pkMsgId";
       final filePath = "${dir.path}/$fileName";
 
       await Dio().download(
         fileUrl,
         filePath,
         options: Options(
-          responseType: ResponseType.bytes,
           headers: {
-            "ApiToken": ApiUrls.apiToken,  // 🔥 MUST MATCH POSTMAN
+            "ApiToken": ApiUrls.apiToken,
           },
         ),
       );
 
-      await OpenFilex.open(filePath);
+      final extension = fileName.split('.').last.toLowerCase();
+
+      if (extension == "pdf") {
+        await OpenFilex.open(filePath, type: "application/pdf");
+      } else if (extension == "jpg" || extension == "jpeg") {
+        await OpenFilex.open(filePath, type: "image/jpeg");
+      } else if (extension == "png") {
+        await OpenFilex.open(filePath, type: "image/png");
+      } else {
+        await OpenFilex.open(filePath);
+      }
 
     } catch (e) {
       print("❌ Download Error: $e");
@@ -789,6 +1114,49 @@ class ChatController extends GetxController {
       downloadingMsgId.value = 0;
     }
   }
+  // Future<void> downloadAndOpenFile({
+  //   required int pkMsgId,
+  //   required int companyId,
+  // })
+  // async {
+  //   try {
+  //     downloadingMsgId.value = pkMsgId;
+  //
+  //     final String fileUrl =
+  //         "https://chatapi.partnersras.com/api/DownloadFile"
+  //         "?PKMsgID=$pkMsgId&FKCompanyID=$companyId";
+  //
+  //     print("Download URL: $fileUrl");
+  //
+  //     final prefs = await SharedPreferences.getInstance();
+  //     final apiToken = prefs.getString("ApiToken") ?? "";
+  //
+  //     final dir = await getApplicationDocumentsDirectory();
+  //     final fileName = "file_$pkMsgId.pdf";
+  //
+  //    // final fileName = "file_$pkMsgId";
+  //     final filePath = "${dir.path}/$fileName";
+  //
+  //     await Dio().download(
+  //       fileUrl,
+  //       filePath,
+  //       options: Options(
+  //         responseType: ResponseType.bytes,
+  //         headers: {
+  //           "ApiToken": ApiUrls.apiToken,  // 🔥 MUST MATCH POSTMAN
+  //         },
+  //       ),
+  //     );
+  //
+  //     await OpenFilex.open(filePath,  type: "application/pdf",
+  //     );
+  //
+  //   } catch (e) {
+  //     print("❌ Download Error: $e");
+  //   } finally {
+  //     downloadingMsgId.value = 0;
+  //   }
+  // }
 
   void addMessages(List<Map<String, dynamic>> newMessages) {
     for (var msg in newMessages) {
@@ -826,5 +1194,16 @@ class ChatController extends GetxController {
     _socket?.close();
     _reconnectTimer?.cancel();
     super.onClose();
+  }
+  void scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (scrollCtrl.hasClients) {
+        scrollCtrl.animateTo(
+          scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 }

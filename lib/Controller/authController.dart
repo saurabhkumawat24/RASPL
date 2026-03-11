@@ -35,6 +35,7 @@ class AuthController extends GetxController {
 
   List<ProductData> filteredProducts = [];
   List<LeadItem> filteredProduct = [];
+  RxList<LeadItem> originalLeadLists = <LeadItem>[].obs;
 
   // ================= LOGIN FUNCTION =================
   Future<void> loginFunction({
@@ -100,9 +101,11 @@ class AuthController extends GetxController {
           await prefs.setString("Name", data["Name"] ?? "");
           await prefs.setString("ImageURL", data["PhotoURL"] ?? "");
           await prefs.setString("URL", data["WebsiteURL"] ?? "");
+          String userId = data["PKUserID"].toString();
 
-          // 🔥 ADD THIS
+          await _connectSignalR(userId);
 
+          print("🟢 Socket Connected After Login");
           Get.offAll(() => CategoryListScreen());
         }
         else {
@@ -208,7 +211,7 @@ class AuthController extends GetxController {
 
 
   RxList<LeadItem> leadLists = <LeadItem>[].obs;
-  List<LeadItem> originalLeadLists = [];
+  //List<LeadItem> originalLeadLists = [];
   RxBool isLoadings1 = false.obs;
   Future<void> GetLeads(
       int userId,
@@ -231,7 +234,7 @@ class AuthController extends GetxController {
 
       if (response != null) {
         leadLists.assignAll(response.data);
-        originalLeadLists = response.data;
+        originalLeadLists.assignAll(response.data);
 
       }
     } catch (e) {
@@ -249,7 +252,8 @@ class AuthController extends GetxController {
     required int fKCompanyID,
     required int fKProductID,
     required String leadStatus,
-  }) async {
+  })
+  async {
     try {
       isLoadings1.value = true;
       update();
@@ -264,12 +268,20 @@ class AuthController extends GetxController {
 
       if (response != null && response.data.isNotEmpty) {
 
+        // activeResponse = response;
+        // filteredProduct = response.data;
+        //
+        // originalLeadLists = List.from(filteredProduct);
+        // originalLeadLists = List.from(response.data);
+        //
+        // /// 🔥 Optional observable (agar kahin aur use ho)
+        // leadLists.assignAll(response.data);
         activeResponse = response;
         filteredProduct = response.data;
-        originalLeadLists = List.from(filteredProduct);
-        originalLeadLists = List.from(response.data);
 
-        /// 🔥 Optional observable (agar kahin aur use ho)
+        originalLeadLists.assignAll(response.data);
+
+        /// optional
         leadLists.assignAll(response.data);
         /// 🔥 CONNECT SIGNALR ONLY ONCE
         if (!connected.value) {
@@ -284,7 +296,8 @@ class AuthController extends GetxController {
           }
         }
 
-      } else {
+      }
+      else {
        // _clearLeads();
       }
 
@@ -359,6 +372,7 @@ class AuthController extends GetxController {
       update();
     }
   }
+
   // Future<void> productFunction({
   //   required String PKUserID,
   //   required String FKCompanyID,
@@ -428,23 +442,39 @@ class AuthController extends GetxController {
     }
   }
 
-
   // ================= FILTER PRODUCTS =================
+  // void filterProducts(String query) {
+  //   final allProducts = productResponse?.data ?? [];
+  //
+  //   if (query.isEmpty) {
+  //     filteredProducts = allProducts;
+  //   } else {
+  //     filteredProducts = allProducts
+  //         .where((p) =>
+  //         (p.productName ?? "")
+  //             .toLowerCase()
+  //             .contains(query.toLowerCase()))
+  //         .toList();
+  //   }
+  //
+  //   update();
+  // }
+
   void filterProducts(String query) {
+
     final allProducts = productResponse?.data ?? [];
 
     if (query.isEmpty) {
-      filteredProducts = allProducts;
+      filteredProducts = List.from(allProducts);
     } else {
-      filteredProducts = allProducts
-          .where((p) =>
-          (p.productName ?? "")
-              .toLowerCase()
-              .contains(query.toLowerCase()))
-          .toList();
+      filteredProducts = allProducts.where((p) {
+        return (p.productName ?? "")
+            .toLowerCase()
+            .contains(query.toLowerCase());
+      }).toList();
     }
 
-    update();
+    update(); // rebuild UI
   }
 
   void filterProduct(String query) {
@@ -523,8 +553,10 @@ class AuthController extends GetxController {
         "&UserType=A";
 
     print("🟡 NEGOTIATE URL: $url");
+    final client = http.Client();
 
-    final response = await http.get(Uri.parse(url));
+    final response = await client.get(Uri.parse(url));
+    //final response = await http.get(Uri.parse(url));
 
     print("🟡 NEGOTIATE RESPONSE: ${response.body}");
 
@@ -596,7 +628,8 @@ class AuthController extends GetxController {
     } catch (e) {
       print("🚨 CONNECT ERROR: $e");
     }
-  }  // ================= HANDLE MESSAGE =================
+  }
+  // ================= HANDLE MESSAGE =================
   // void _handleSocketData(dynamic data) {
   //   print("🔥 RAW SOCKET DATA: $data");
   //
@@ -634,9 +667,70 @@ class AuthController extends GetxController {
   //     print("Parse Error: $e");
   //   }
   // }
+
+  void updateUnread(int leadId) {
+
+    int index = originalLeadLists.indexWhere(
+          (e) => e.pkId.toString() == leadId.toString(),
+    );
+
+    if (index != -1) {
+
+      originalLeadLists[index].unReadUserCount =
+          (originalLeadLists[index].unReadUserCount ?? 0) + 1;
+
+      originalLeadLists.refresh(); // UI refresh
+    }
+
+  }
   RxList<ProductResponse> productList = <ProductResponse>[].obs;
+  // void _handleSocketData(dynamic data) {
+  //   try {
+  //     if (data == null || data.toString().isEmpty) return;
+  //
+  //     final decoded = jsonDecode(data);
+  //
+  //     if (decoded is! Map || !decoded.containsKey("M")) return;
+  //
+  //     final List hubMessages = decoded["M"];
+  //
+  //     for (var hubMsg in hubMessages) {
+  //
+  //       // 🔔 MESSAGE RECEIVED
+  //       if (hubMsg["M"] == "ReceiveMessage") {
+  //
+  //         final args = hubMsg["A"];
+  //
+  //         if (args is List && args.isNotEmpty) {
+  //
+  //           final message = args[0];
+  //           int leadId = message["FKLeadID"] ?? 0;
+  //           if (leadId == currentOpenLeadId.value) {
+  //             _refreshReadData();
+  //           }
+  //
+  //
+  //           print("📩 Message for Lead: $leadId");
+  //
+  //           // 👇 Increment unread locally
+  //           updateProductUnreadIncrement(leadId);
+  //           updateProductUnreadIncrements(leadId);
+  //           updateUnreadForLead(leadId);
+  //         }
+  //       }
+  //     }
+  //   } catch (e) {
+  //     print("Parse Error: $e");
+  //   }
+  // }
   void _handleSocketData(dynamic data) {
+
+    if (data == "{}") return; // ignore heartbeat
+
+    print("🔥 SOCKET DATA: $data");
+
     try {
+
       if (data == null || data.toString().isEmpty) return;
 
       final decoded = jsonDecode(data);
@@ -647,7 +741,6 @@ class AuthController extends GetxController {
 
       for (var hubMsg in hubMessages) {
 
-        // 🔔 MESSAGE RECEIVED
         if (hubMsg["M"] == "ReceiveMessage") {
 
           final args = hubMsg["A"];
@@ -655,23 +748,75 @@ class AuthController extends GetxController {
           if (args is List && args.isNotEmpty) {
 
             final message = args[0];
-            int leadId = message["FKLeadID"] ?? 0;
-            if (leadId == currentOpenLeadId.value) {
-              _refreshReadData();
-            }
+
+            int leadId = int.parse(message["FKLeadID"].toString());
 
             print("📩 Message for Lead: $leadId");
 
-            // 👇 Increment unread locally
-            updateProductUnreadIncrement(leadId);
-            updateProductUnreadIncrements(leadId);
+            /// 🔥 UPDATE UNREAD BADGE
+            Get.find<AuthController>().updateUnread(leadId);
+
           }
         }
       }
+
     } catch (e) {
-      print("Parse Error: $e");
+
+      print("Socket Parse Error: $e");
+
     }
   }
+
+  // void _handleSocketData(dynamic data) {
+  //   try {
+  //
+  //     if (data == null || data.toString().isEmpty) return;
+  //
+  //     final decoded = jsonDecode(data);
+  //
+  //     if (decoded is! Map || !decoded.containsKey("M")) return;
+  //
+  //     final List hubMessages = decoded["M"];
+  //
+  //     for (var hubMsg in hubMessages) {
+  //
+  //       if (hubMsg["M"] == "ReceiveMessage") {
+  //
+  //         final args = hubMsg["A"];
+  //
+  //         if (args is List && args.isNotEmpty) {
+  //
+  //           final message = args[0];
+  //
+  //           int leadId = message["FKLeadID"] ?? 0;
+  //
+  //           print("📩 Message for Lead: $leadId");
+  //           if (leadId == currentOpenLeadId.value) {
+  //             _refreshReadData();
+  //           } else {
+  //             updateUnreadForLead(leadId);
+  //           }
+  //           // 👇 Agar chat open hai to read refresh
+  //           // if (leadId == currentOpenLeadId.value) {
+  //           //   _refreshReadData();
+  //           // } else {
+  //           //
+  //           //   // 👇 unread increase
+  //           //   updateUnreadForLead(leadId);
+  //           //
+  //           //   // dashboard count
+  //           //   updateProductUnreadIncrement(leadId);
+  //           //   updateProductUnreadIncrements(leadId);
+  //           //
+  //           // }
+  //
+  //         }
+  //       }
+  //     }
+  //   } catch (e) {
+  //     print("Parse Error: $e");
+  //   }
+  // }
   Timer? _readTimer;
   RxInt currentOpenLeadId = 0.obs;
   RxString currentUserId = "".obs;
@@ -684,6 +829,94 @@ class AuthController extends GetxController {
         FKUserID: currentUserId.value,
       );
     });
+  }
+
+  // void updateUnreadForLead(int leadId) {
+  //
+  //   // PRODUCT LIST
+  //   final productIndex = filteredProducts.indexWhere(
+  //           (e) => e.fKOpenLeadID == leadId);
+  //
+  //   if (productIndex != -1) {
+  //     filteredProducts[productIndex].unReadCount += 1;
+  //   }
+  //
+  //   // ACTIVE LEAD LIST
+  //   final leadIndex = filteredProduct.indexWhere(
+  //           (e) => e.pkId == leadId);
+  //
+  //   if (leadIndex != -1) {
+  //     filteredProduct[leadIndex].unReadUserCount =
+  //         (filteredProduct[leadIndex].unReadUserCount ?? 0) + 1;
+  //   }
+  //
+  //   dashboardUnreadCount.value =
+  //       filteredProducts.fold(
+  //           0,
+  //               (sum, p) => sum + (p.unReadCount ?? 0));
+  //
+  //   update();
+  //
+  //   print("✅ Unread Updated for Lead $leadId");
+  // }
+  // void updateUnreadForLead(int leadId) {
+  //
+  //   // PRODUCT LIST
+  //   final productIndex =
+  //   filteredProducts.indexWhere((e) => e.fKOpenLeadID == leadId);
+  //
+  //   if (productIndex != -1) {
+  //     filteredProducts[productIndex].unReadCount =
+  //         (filteredProducts[productIndex].unReadCount ?? 0) + 1;
+  //   }
+  //
+  //   // ACTIVE LEAD LIST
+  //   final leadIndex =
+  //   filteredProduct.indexWhere((e) => e.pkId == leadId);
+  //
+  //   if (leadIndex != -1) {
+  //     filteredProduct[leadIndex].unReadUserCount =
+  //         (filteredProduct[leadIndex].unReadUserCount ?? 0) + 1;
+  //   }
+  //
+  //   // DASHBOARD COUNT
+  //   dashboardUnreadCount.value = filteredProducts.fold(
+  //     0,
+  //         (sum, p) => sum + (p.unReadCount ?? 0),
+  //   );
+  //
+  //   update(); // because using GetBuilder
+  //
+  //   print("✅ Unread Updated for Lead $leadId");
+  // }
+  void updateUnreadForLead(int leadId) {
+
+    final productIndex =
+    filteredProducts.indexWhere((e) => e.fKOpenLeadID == leadId);
+
+    if (productIndex != -1) {
+
+      filteredProducts[productIndex].unReadCount =
+          (filteredProducts[productIndex].unReadCount ?? 0) + 1;
+
+      //filteredProducts.refresh();
+    }
+
+    final leadIndex =
+    filteredProduct.indexWhere((e) => e.pkId == leadId);
+
+    if (leadIndex != -1) {
+
+      filteredProduct[leadIndex].unReadUserCount =
+          (filteredProduct[leadIndex].unReadUserCount ?? 0) + 1;
+
+      //filteredProduct.refresh();
+    }
+
+    dashboardUnreadCount.value =
+        filteredProducts.fold(
+            0,
+                (sum, p) => sum + (p.unReadCount ?? 0));
   }
   void updateProductUnreadIncrement(int leadId) {
 
@@ -709,31 +942,58 @@ class AuthController extends GetxController {
       print("❌ No Product Found For Lead $leadId");
     }
   }
-
   void updateProductUnreadIncrements(int leadId) {
 
     final index = filteredProduct.indexWhere(
-            (element) => element.leadId == leadId);
+            (element) => element.pkId == leadId);
 
     if (index != -1) {
 
       filteredProduct[index].unReadUserCount =
-          filteredProduct[index].unReadUserCount + 1;
+          (filteredProduct[index].unReadUserCount ?? 0) + 1;
 
-      // 🔥 Dashboard total update
+      // 🔥 ORIGINAL LIST UPDATE
+      final originalIndex = originalLeadLists.indexWhere(
+              (element) => element.pkId == leadId);
+
+      if (originalIndex != -1) {
+        originalLeadLists[originalIndex].unReadUserCount =
+            (originalLeadLists[originalIndex].unReadUserCount ?? 0) + 1;
+      }
+
       dashboardUnreadCount.value =
           filteredProduct.fold(
             0,
-                (sum, p) => sum + p.unReadUserCount,
+                (sum, p) => sum + (p.unReadUserCount ?? 0),
           );
 
-      update(); // because you are using GetBuilder
-
-      print("✅ Unread Updated for Lead $leadId");
-    } else {
-      print("❌ No Product Found For Lead $leadId");
+      update();
     }
   }
+  // void updateProductUnreadIncrements(int leadId) {
+  //
+  //   final index = filteredProduct.indexWhere(
+  //           (element) => element.leadId == leadId);
+  //
+  //   if (index != -1) {
+  //
+  //     filteredProduct[index].unReadUserCount =
+  //         filteredProduct[index].unReadUserCount + 1;
+  //
+  //     // 🔥 Dashboard total update
+  //     dashboardUnreadCount.value =
+  //         filteredProduct.fold(
+  //           0,
+  //               (sum, p) => sum + p.unReadUserCount,
+  //         );
+  //
+  //     update(); // because you are using GetBuilder
+  //
+  //     print("✅ Unread Updated for Lead $leadId");
+  //   } else {
+  //     print("❌ No Product Found For Lead $leadId");
+  //   }
+  // }
 
   // ================= JOIN TICKET =================
   final Set<int> _joinedTickets = {};

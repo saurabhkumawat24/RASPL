@@ -3,15 +3,24 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../Controller/authController.dart';
 import '../Controller/chatController.dart';
 import '../api/api.dart';
 import '../util/appImage.dart';
 import '../util/font_family.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:archive/archive_io.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
 class WhatsAppChatPage extends StatefulWidget {
   final String imageurl;
@@ -46,13 +55,43 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
 
   @override
 
+  Future<File> compressImage(File file) async {
+    final dir = await getTemporaryDirectory();
+    final targetPath = "${dir.path}/${DateTime.now().millisecondsSinceEpoch}.jpg";
+
+    final result = await FlutterImageCompress.compressAndGetFile(
+      file.absolute.path,
+      targetPath,
+      quality: 70,
+    );
+
+    return File(result!.path);
+  }
+  Future<void> _openLink(LinkableElement link) async {
+    final Uri url = Uri.parse(link.url);
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(
+        url,
+        mode: LaunchMode.externalApplication, // browser open karega
+      );
+    }
+  }
+  void copyMessage(String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    Get.snackbar(
+      "Copied",
+      "Message copied",
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
   void initState() {
     super.initState();
     final AuthController authController = Get.find<AuthController>();
 
     chat = Get.put(ChatController());
     chat.ticketId.value = "";
-
+    chat.leadId.value = widget.leadId;
     // 👇 Important Fix
     WidgetsBinding.instance.addPostFrameCallback((_) {
       authController.currentOpenLeadId.value = widget.leadId;
@@ -94,49 +133,189 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
     super.dispose();
   }
   @override
+  // Future<void> pickCameraImage() async {
+  //   final XFile? image = await _picker.pickImage(source: ImageSource.camera);
+  //
+  //   if (image == null) return;
+  //
+  //   await chat.sendFileMultipart(
+  //     filePath: image.path,
+  //     companyId: widget.companyId,
+  //     leadId: chat.leadId.value,
+  //     agentId: widget.agentId,
+  //     productId: widget.productId,
+  //   );
+  // }
+
   Future<void> pickCameraImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.camera);
 
     if (image == null) return;
 
+    File compressed = await compressImage(File(image.path));
+
     await chat.sendFileMultipart(
-      filePath: image.path,
+      filePath: compressed.path,
       companyId: widget.companyId,
       leadId: chat.leadId.value,
       agentId: widget.agentId,
       productId: widget.productId,
     );
   }
+  // Future<void> pickGalleryImage() async {
+  //   final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+  //
+  //   if (image == null) return;
+  //
+  //   await chat.sendFileMultipart(
+  //     filePath: image.path,
+  //     companyId: widget.companyId,
+  //     leadId: chat.leadId.value,
+  //     agentId: widget.agentId,
+  //     productId: widget.productId,
+  //   );
+  // }
+  // Future<void> pickGalleryImages() async {
+  //   final List<XFile>? images = await _picker.pickMultiImage();
+  //
+  //   if (images == null || images.isEmpty) return;
+  //
+  //   Get.dialog(
+  //     ImagePreviewDialog(
+  //       files: images.map((e) => File(e.path)).toList(),
+  //       onSend: (files) async {
+  //         for (var file in files) {
+  //           await chat.sendFileMultipart(
+  //             filePath: file.path,
+  //             companyId: widget.companyId,
+  //             leadId: chat.leadId.value,
+  //             agentId: widget.agentId,
+  //             productId: widget.productId,
+  //           );
+  //         }
+  //       },
+  //     ),
+  //   );
+  // }
+  Future<void> pickGalleryImages() async {
+    final List<XFile>? images = await _picker.pickMultiImage();
 
+    if (images == null || images.isEmpty) return;
 
-  Future<void> pickGalleryImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    Get.dialog(
+      ImagePreviewDialog(
+        files: images.map((e) => File(e.path)).toList(),
+        onSend: (files) async {
+          for (var file in files) {
 
-    if (image == null) return;
+            File compressed = await compressImage(file);
 
-    await chat.sendFileMultipart(
-      filePath: image.path,
-      companyId: widget.companyId,
-      leadId: chat.leadId.value,
-      agentId: widget.agentId,
-      productId: widget.productId,
+            await chat.sendFileMultipart(
+              filePath: compressed.path,
+              companyId: widget.companyId,
+              leadId: chat.leadId.value,
+              agentId: widget.agentId,
+              productId: widget.productId,
+            );
+          }
+        },
+      ),
     );
   }
+  // Future<void> pickFile() async {
+  //   FilePickerResult? result = await FilePicker.platform.pickFiles();
+  //
+  //   if (result == null || result.files.single.path == null) return;
+  //
+  //   await chat.sendFileMultipart(
+  //     filePath: result.files.single.path!,
+  //     companyId: widget.companyId,
+  //     leadId: chat.leadId.value,
+  //     agentId: widget.agentId,
+  //     productId: widget.productId,
+  //   );
+  // }
 
 
-  Future<void> pickFile() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles();
 
-    if (result == null || result.files.single.path == null) return;
+  Future<File> compressFileIfNeeded(File file) async {
 
-    await chat.sendFileMultipart(
-      filePath: result.files.single.path!,
-      companyId: widget.companyId,
-      leadId: chat.leadId.value,
-      agentId: widget.agentId,
-      productId: widget.productId,
+    int sizeMB = file.lengthSync() ~/ (1024 * 1024);
+
+    if (sizeMB < 5) {
+      return file; // 5MB se choti file compress nahi karega
+    }
+
+    final dir = await getTemporaryDirectory();
+    final zipPath = "${dir.path}/${DateTime.now().millisecondsSinceEpoch}.zip";
+
+    final encoder = ZipFileEncoder();
+    encoder.create(zipPath);
+
+    encoder.addFile(file);
+
+    encoder.close();
+
+    return File(zipPath);
+  }
+  Future<void> pickFiles() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+    );
+
+    if (result == null) return;
+
+    List<File> files =
+    result.paths.whereType<String>().map((p) => File(p)).toList();
+
+    Get.dialog(
+      FilePreviewDialog(
+        files: files,
+        onSend: (selectedFiles) async {
+          for (var file in selectedFiles) {
+
+            File compressed = await compressFileIfNeeded(file);
+
+            await chat.sendFileMultipart(
+              filePath: compressed.path,
+              companyId: widget.companyId,
+              leadId: chat.leadId.value,
+              agentId: widget.agentId,
+              productId: widget.productId,
+            );
+          }
+        },
+      ),
     );
   }
+  // Future<void> pickFiles() async {
+  //   FilePickerResult? result = await FilePicker.platform.pickFiles(
+  //     allowMultiple: true,
+  //   );
+  //
+  //   if (result == null) return;
+  //
+  //   List<File> files =
+  //   result.paths.whereType<String>().map((p) => File(p)).toList();
+  //
+  //   Get.dialog(
+  //     FilePreviewDialog(
+  //       files: files,
+  //       onSend: (selectedFiles) async {
+  //         for (var file in selectedFiles) {
+  //           await chat.sendFileMultipart(
+  //             filePath: file.path,
+  //             companyId: widget.companyId,
+  //             leadId: chat.leadId.value,
+  //             agentId: widget.agentId,
+  //             productId: widget.productId,
+  //           );
+  //         }
+  //       },
+  //     ),
+  //   );
+  // }
+
 
 
   void addFileMessage(String path, String type, bool isMe, {String? name}) {
@@ -165,8 +344,8 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               attachItem(Icons.camera_alt, "Camera", pickCameraImage),
-              attachItem(Icons.image, "Gallery", pickGalleryImage),
-              attachItem(Icons.insert_drive_file, "File", pickFile),
+              attachItem(Icons.image, "Gallery", pickGalleryImages),
+              attachItem(Icons.insert_drive_file, "File", pickFiles),
             ],
           ),
         );
@@ -194,7 +373,16 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
       ],
     );
   }
+  Future<void> openUrl(String url) async {
+    final Uri uri = Uri.parse(url);
 
+    if (!await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    )) {
+      throw Exception('Could not launch $url');
+    }
+  }
   // =================== TIME FORMAT ===================
   String formatTime(DateTime time) {
     final hour = time.hour.toString().padLeft(2, '0');
@@ -446,413 +634,847 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
                         print("ALL MESSAGES: ${chat.messages}");
                         print("SINGLE MESSAGE: ${chat.messages[i]}");
                         return Align(
-                          alignment:
-                          isMe ? Alignment.centerRight : Alignment.centerLeft,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                margin: const EdgeInsets.symmetric(
-                                    vertical: 4, horizontal: 8),
-                                padding: const EdgeInsets.all(10),
-                                constraints:
-                                const BoxConstraints(maxWidth: 260),
-                                decoration: BoxDecoration(
-                                  color: isMe
-                                      ? const Color(0xffbcc5ed)
-                                      .withOpacity(0.5)
-                                      : Colors.white.withOpacity(0.5),
-                                  borderRadius:
-                                  BorderRadius.circular(12),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                                  children: [
+                            alignment:
+                            isMe ? Alignment.centerRight : Alignment.centerLeft,
+                            child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                            Container(
+                            margin: const EdgeInsets.symmetric(
+                                vertical: 4, horizontal: 8),
+                            padding: const EdgeInsets.all(10),
+                            constraints:
+                            const BoxConstraints(maxWidth: 260),
+                            decoration: BoxDecoration(
+                              color: isMe
+                                  ? const Color(0xffbcc5ed)
+                                  .withOpacity(0.5)
+                                  : Colors.white.withOpacity(0.5),
+                              borderRadius:
+                              BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+                                if (msgType == "TEXT")
+                            GestureDetector(
+                            onTap: () {
+                          if (msgText.contains("http")) {
+                            openUrl(msgText); // link open
+                          }
+                        },
+                        onLongPress: () {
+                        Clipboard.setData(ClipboardData(text: msgText));
 
-                                      /// ✅ TEXT MESSAGE
-                                      if (msgType == "TEXT")
-                                        Text(
-                                          msgText,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500,
-                                            color: Colors.black,
-                                          ),
-                                        ),
+                        // Get.snackbar(
+                        //   "Copied",
+                        //   "Message copied",
+                        //   snackPosition: SnackPosition.BOTTOM,
+                        //   duration: Duration(seconds: 2),
+                        // );
+                        },
+                        child: Text(
+                        msgText,
+                        style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: msgText.contains("http")
+                        ? Colors.blue
+                            : Colors.black,
+                        decoration: msgText.contains("http")
+                        ? TextDecoration.underline
+                            : TextDecoration.none,
+                        ),
+                        ),
+                        ),
+                        /// ✅ TEXT MESSAGE
 
-                                      /// ✅ FILE MESSAGE (Your Existing Code)
-                                      if (msgType == "FILE")
-                                      if (isImage)
-                                        Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            GestureDetector(
-                                              onTap: () async {
-                                                Get.dialog(
-                                                  Scaffold(
-                                                    backgroundColor: Colors.black,
-                                                    body: SafeArea(
-                                                      child: Stack(
-                                                        children: [
 
-                                                          /// 🔍 Zoomable Image
-                                                          Center(
-                                                            child: InteractiveViewer(
-                                                              minScale: 0.8,
-                                                              maxScale: 4,
-                                                              child: Image.network(
-                                                                fileUrl,
-                                                                fit: BoxFit.contain,
-                                                                errorBuilder: (_, __, ___) => const Icon(
-                                                                  Icons.broken_image,
-                                                                  color: Colors.white,
-                                                                  size: 60,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
+                        /// ✅ FILE MESSAGE (Your Existing Code)
+                        if (msgType == "FILE")
+                        // if (isImage)
+                        // Stack(
+                        // alignment: Alignment.center,
+                        // children: [
+                        // GestureDetector(
+                        // onTap: () async {
+                        // RxDouble rotationAngle = 0.0.obs;
+                        //
+                        // Get.dialog(
+                        // Scaffold(
+                        // backgroundColor: Colors.black,
+                        // body: SafeArea(
+                        // child: Stack(
+                        // children: [
+                        //
+                        // /// 🔍 Zoom + Rotate Image
+                        // Center(
+                        // child: Obx(() => InteractiveViewer(
+                        // minScale: 0.8,
+                        // maxScale: 4,
+                        // child: Transform.rotate(
+                        // angle: rotationAngle.value,
+                        // child: Image.network(
+                        // fileUrl,
+                        // fit: BoxFit.contain,
+                        //   errorBuilder: (_, __, ___) => const Icon(
+                        // Icons.broken_image,
+                        // color: Colors.white,
+                        // size: 60,
+                        // ),
+                        // ),
+                        // ),
+                        // )),
+                        // ),
+                        //
+                        // /// ⟳ Rotate Button
+                        // Positioned(
+                        // top: 10,
+                        // right: 110,
+                        // child: InkWell(
+                        // onTap: () {
+                        // rotationAngle.value += 1.57; // 90 degree
+                        // },
+                        // child: Container(
+                        // padding: const EdgeInsets.all(8),
+                        // decoration: BoxDecoration(
+                        // color: Colors.black.withOpacity(0.6),
+                        // shape: BoxShape.circle,
+                        // ),
+                        // child: const Icon(
+                        // Icons.rotate_right,
+                        // color: Colors.white,
+                        // size: 26,
+                        // ),
+                        // ),
+                        // ),
+                        // ),
+                        //
+                        // /// ⬇ Download Button
+                        // Positioned(
+                        // top: 10,
+                        // right: 60,
+                        // child: Obx(() {
+                        // bool isDownloading =
+                        // chat.downloadingMsgId.value == m["PKID"];
+                        //
+                        // return InkWell(
+                        // onTap: isDownloading
+                        // ? null
+                        //     : () async {
+                        // await chat.downloadAndOpenFile(
+                        // pkMsgId: m["PKID"],
+                        // companyId: widget.companyId,
+                        // );
+                        // },
+                        // child: Container(
+                        // padding: const EdgeInsets.all(8),
+                        // decoration: BoxDecoration(
+                        // color: Colors.black.withOpacity(0.6),
+                        // shape: BoxShape.circle,
+                        // ),
+                        // child: isDownloading
+                        // ? const SizedBox(
+                        // width: 26,
+                        // height: 26,
+                        // child: CircularProgressIndicator(
+                        // strokeWidth: 2.5,
+                        // color: Colors.white,
+                        // ),
+                        // )
+                        //     : const Icon(
+                        // Icons.download,
+                        // color: Colors.white,
+                        // size: 26,
+                        // ),
+                        // ),
+                        // );
+                        // }),
+                        // ),
+                        //
+                        // /// ❌ Close Button
+                        // Positioned(
+                        // top: 10,
+                        // right: 10,
+                        // child: InkWell(
+                        // onTap: () => Get.back(),
+                        // child: Container(
+                        // padding: const EdgeInsets.all(8),
+                        // decoration: BoxDecoration(
+                        // color: Colors.black.withOpacity(0.6),
+                        // shape: BoxShape.circle,
+                        // ),
+                        // child: const Icon(
+                        // Icons.close,
+                        // color: Colors.white,
+                        // size: 26,
+                        // ),
+                        // ),
+                        // ),
+                        // ),
+                        // ],
+                        // ),
+                        // ),
+                        // ),
+                        // barrierColor: Colors.black87,
+                        // barrierDismissible: true,
+                        // );
+                        //
+                        // },
+                        // child: ClipRRect(
+                        // borderRadius: BorderRadius.circular(12),
+                        // child: Image.network(
+                        // fileUrl ?? "",
+                        // height: 180,
+                        // width: 180,
+                        // fit: BoxFit.cover,
+                        // errorBuilder: (_, __, ___)=>
+                        // const Icon(Icons.broken_image, size: 80),
+                        // ),
+                        // ),
+                        // ),
+                        //
+                        // // 🔹 Loader overlay
+                        // Obx(() {
+                        // final isDownloading = chat.downloadingMsgId.value == m["PKID"];
+                        // if (!isDownloading) return const SizedBox.shrink();
+                        //
+                        // return Container(
+                        // height: 180,
+                        // width: 180,
+                        // decoration: BoxDecoration(
+                        // color: Colors.black45,
+                        // borderRadius: BorderRadius.circular(12),
+                        // ),
+                        // child: const Center(
+                        // child: CircularProgressIndicator(
+                        // color: Colors.white,
+                        // ),
+                        // ),
+                        // );
+                        // }),
+                        // ],
+                        // )
+                        if (isImage)
+                        Stack(
+                        alignment: Alignment.center,
+                        children: [
+                        GestureDetector(
+                        onTap: () {
 
-                                                          /// ❌ Close Button
-                                                          Positioned(
-                                                            top: 10,
-                                                            right: 60,
-                                                            child:Obx(() {
-                                                              // Check if this message is being downloaded
-                                                              bool isDownloading = chat.downloadingMsgId.value == m["PKID"];
+                        /// 🔹 Collect all image messages
+                        final imageMessages = chat.messages.where((msg) {
+                        final savedFile = msg["SavedFileName"] ?? "";
+                        final fileUrl = (msg["FileURL"] ?? msg["FileName"] ?? "").toString();
 
-                                                              return InkWell(
-                                                                onTap: isDownloading
-                                                                    ? null // disable button while downloading
-                                                                    : () async {
-                                                                  await chat.downloadAndOpenFile(
-                                                                    pkMsgId: m["PKID"],
-                                                                    companyId: widget.companyId,
-                                                                  );
-                                                                },
-                                                                child: Container(
-                                                                  padding: const EdgeInsets.all(8),
-                                                                  decoration: BoxDecoration(
-                                                                    color: Colors.black.withOpacity(0.6),
-                                                                    shape: BoxShape.circle,
-                                                                  ),
-                                                                  child: isDownloading
-                                                                      ? SizedBox(
-                                                                    width: 26,
-                                                                    height: 26,
-                                                                    child: CircularProgressIndicator(
-                                                                      //value: chat.downloadProgress.value,
-                                                                      strokeWidth: 2.5,
-                                                                      color: Colors.white,
-                                                                    ),
-                                                                  )
-                                                                      : const Icon(
-                                                                    Icons.download,
-                                                                    color: Colors.white,
-                                                                    size: 26,
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            })
-                                                          ),
-                                                          Positioned(
-                                                            top: 10,
-                                                            right: 10,
-                                                            child: InkWell(
-                                                              onTap: () => Get.back(),
-                                                              child: Container(
-                                                                padding: const EdgeInsets.all(8),
-                                                                decoration: BoxDecoration(
-                                                                  color: Colors.black.withOpacity(0.6),
-                                                                  shape: BoxShape.circle,
-                                                                ),
-                                                                child: const Icon(
-                                                                  Icons.close,
-                                                                  color: Colors.white,
-                                                                  size: 26,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                          ),
+                        final ext = savedFile.toString().contains(".")
+                        ? savedFile.toString().split(".").last.toLowerCase()
+                            : fileUrl.contains(".")
+                        ? fileUrl.split(".").last.toLowerCase()
+                            : "";
 
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  barrierColor: Colors.black87,
-                                                  barrierDismissible: true, // 👈 outside tap se bhi close hoga
-                                                );
+                        return ["jpg","jpeg","png","gif","webp"].contains(ext);
+                        }).toList();
 
-                                              },
-                                              child: ClipRRect(
-                                                borderRadius: BorderRadius.circular(12),
-                                                child: Image.network(
-                                                  fileUrl ?? "",
-                                                  height: 180,
-                                                  width: 180,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) =>
-                                                  const Icon(Icons.broken_image, size: 80),
-                                                ),
+                        /// 🔹 Current image index
+                        final startIndex =
+                        imageMessages.indexWhere((img) => img["PKID"] == m["PKID"]);
+
+                        PageController pageController =
+                        PageController(initialPage: startIndex);
+
+                        RxInt currentIndex = startIndex.obs;
+                        RxDouble rotationAngle = 0.0.obs;
+
+                        // Get.dialog(
+                        // Scaffold(
+                        // backgroundColor: Colors.black,
+                        // body: SafeArea(
+                        // child: Stack(
+                        // children: [
+                        //
+                        // /// IMAGE SLIDER
+                        // Center(
+                        // child:  PageView.builder(
+                        // controller: pageController,
+                        // itemCount: imageMessages.length,
+                        // onPageChanged: (i) {
+                        // currentIndex.value = i;
+                        // rotationAngle.value = 0;
+                        // },
+                        // itemBuilder: (_, index) {
+                        //
+                        // final img = imageMessages[index];
+                        // final url =
+                        // (img["FileURL"] ?? img["FileName"]).toString();
+                        //
+                        // return InteractiveViewer(
+                        // minScale: 0.8,
+                        // maxScale: 4,
+                        // child: Transform.rotate(
+                        // angle: rotationAngle.value,
+                        // child: Image.network(
+                        // url,
+                        // fit: BoxFit.contain,
+                        // errorBuilder: (_, __, ___) => const Icon(
+                        // Icons.broken_image,
+                        // color: Colors.white,
+                        // size: 60,
+                        // ),
+                        // ),
+                        // ),
+                        // );
+                        // },
+                        // )),
+                        //
+                        //
+                        //
+                        // /// IMAGE COUNTER
+                        // Positioned(
+                        // top: 12,
+                        // left: 20,
+                        // child: Obx(() => Text(
+                        // "${currentIndex.value + 1} / ${imageMessages.length}",
+                        // style: const TextStyle(
+                        // color: Colors.white,
+                        // fontSize: 16,
+                        // fontWeight: FontWeight.w500,
+                        // ),
+                        // )),
+                        // ),
+                        //
+                        // /// ROTATE BUTTON
+                        // Positioned(
+                        // top: 10,
+                        // right: 110,
+                        // child: InkWell(
+                        // onTap: () {
+                        // rotationAngle.value += 1.57;
+                        // },
+                        // child: Container(
+                        // padding: const EdgeInsets.all(8),
+                        // decoration: BoxDecoration(
+                        // color: Colors.black.withOpacity(0.6),
+                        // shape: BoxShape.circle,
+                        // ),
+                        // child: const Icon(
+                        // Icons.rotate_right,
+                        // color: Colors.white,
+                        // size: 26,
+                        // ),
+                        // ),
+                        // ),
+                        // ),
+                        //
+                        // /// DOWNLOAD BUTTON
+                        // Positioned(
+                        // top: 10,
+                        // right: 60,
+                        // child: Obx(() {
+                        //
+                        // bool isDownloading =
+                        // chat.downloadingMsgId.value ==
+                        // imageMessages[currentIndex.value]["PKID"];
+                        //
+                        // return InkWell(
+                        // onTap: isDownloading
+                        // ? null
+                        //     : () async {
+                        //
+                        // await chat.downloadAndOpenFile(
+                        // pkMsgId:
+                        // imageMessages[currentIndex.value]["PKID"],
+                        // companyId: widget.companyId,
+                        //   fileName: m["OriginalFileName"],
+                        //
+                        // );
+                        // },
+                        // child: Container(
+                        // padding: const EdgeInsets.all(8),
+                        // decoration: BoxDecoration(
+                        // color: Colors.black.withOpacity(0.6),
+                        // shape: BoxShape.circle,
+                        // ),
+                        // child: isDownloading
+                        // ? const SizedBox(
+                        // width: 26,
+                        // height: 26,
+                        // child: CircularProgressIndicator(
+                        // strokeWidth: 2.5,
+                        // color: Colors.white,
+                        // ),
+                        // )
+                        //     : const Icon(
+                        // Icons.download,
+                        // color: Colors.white,
+                        // size: 26,
+                        // ),
+                        // ),
+                        // );
+                        // }),
+                        // ),
+                        //
+                        // /// CLOSE BUTTON
+                        // Positioned(
+                        // top: 10,
+                        // right: 10,
+                        // child: InkWell(
+                        // onTap: () => Get.back(),
+                        // child: Container(
+                        // padding: const EdgeInsets.all(8),
+                        // decoration: BoxDecoration(
+                        // color: Colors.black.withOpacity(0.6),
+                        // shape: BoxShape.circle,
+                        // ),
+                        // child: const Icon(
+                        // Icons.close,
+                        // color: Colors.white,
+                        // size: 26,
+                        // ),
+                        // ),
+                        // ),
+                        // ),
+                        // ],
+                        // ),
+                        // ),
+                        // ),
+                        // barrierColor: Colors.black87,
+                        // barrierDismissible: true,
+                        // );
+                        Get.dialog(
+                          Scaffold(
+                            backgroundColor: Colors.black,
+                            body: SafeArea(
+                              child: Stack(
+                                children: [
+                                  /// 🔹 PageView for multiple images
+                                  Center(
+                                    child: PageView.builder(
+                                      controller: pageController,
+                                      itemCount: imageMessages.length,
+                                      onPageChanged: (i) {
+                                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                                          currentIndex.value = i;
+                                          rotationAngle.value = 0;
+                                        });
+                                      },
+                                      itemBuilder: (_, index) {
+                                        final img = imageMessages[index];
+                                        final url = (img["FileURL"] ?? img["FileName"]).toString();
+
+                                        return InteractiveViewer(
+                                          minScale: 0.8,
+                                          maxScale: 4,
+                                          child: Obx(() => Transform.rotate(
+                                            angle: rotationAngle.value,
+                                            child: Image.network(
+                                              url,
+                                              fit: BoxFit.contain,
+                                              errorBuilder: (_, __, ___) => const Icon(
+                                                Icons.broken_image,
+                                                color: Colors.white,
+                                                size: 60,
                                               ),
                                             ),
-
-                                            // 🔹 Loader overlay
-                                            Obx(() {
-                                              final isDownloading = chat.downloadingMsgId.value == m["PKID"];
-                                              if (!isDownloading) return const SizedBox.shrink();
-
-                                              return Container(
-                                                height: 180,
-                                                width: 180,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.black45,
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                child: const Center(
-                                                  child: CircularProgressIndicator(
-                                                    color: Colors.white,
-                                                  ),
-                                                ),
-                                              );
-                                            }),
-                                          ],
-                                        )
-    //                                     GestureDetector(
-    // onTap: () async {
-    // await chat.downloadAndOpenFile(
-    // pkMsgId: m["PKID"],
-    // companyId: widget.companyId,
-    // );
-    // },
-    // child: ClipRRect(
-    // borderRadius: BorderRadius.circular(12),
-    // child: Image.network(
-    //   fileUrl ?? "",
-    // height: 180,
-    // width: 180,
-    // fit: BoxFit.cover,
-    // errorBuilder: (_, __, ___) =>
-    // const Icon(Icons.broken_image, size: 80),
-    // ),
-    // ),
-    // )
-                                      else Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            Icons.insert_drive_file,
-                                            color: Color(0xFF2e448d),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Flexible(
-                                            child: Text(
-                                              fileName.isNotEmpty ? fileName : "File",
-                                              style: const TextStyle(
-                                                color: Colors.black,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Obx(() {
-                                            // Check if this file is being downloaded
-                                            final isDownloading =
-                                                chat.downloadingMsgId.value.toString() == m["PKID"]?.toString();
-
-                                            return InkWell(
-                                              onTap: isDownloading
-                                                  ? null // Disable button while downloading
-                                                  : () async {
-                                                await chat.downloadAndOpenFile(
-                                                  pkMsgId: m["PKID"],
-                                                  companyId: widget.companyId,
-                                                );
-                                              },
-                                              child: Container(
-                                                width: 26,
-                                                height: 26,
-                                                alignment: Alignment.center,
-                                                child: isDownloading
-                                                    ? const SizedBox(
-                                                  width: 20,
-                                                  height: 20,
-                                                  child: CircularProgressIndicator(
-                                                    strokeWidth: 2.5,
-                                                    color: Color(0xFF2e448d),
-                                                  ),
-                                                )
-                                                    : const Icon(
-                                                  Icons.download,
-                                                  color: Color(0xFF2e448d),
-                                                  size: 26,
-                                                ),
-                                              ),
-                                            );
-                                          }),
-                                        ],
-                                      )
-    //                                     Row(
-    // mainAxisSize: MainAxisSize.min,
-    // children: [
-    // const Icon(
-    // Icons.insert_drive_file,
-    // color: Color(0xFF2e448d),
-    // ),
-    //
-    // const SizedBox(width: 6),
-    //
-    // Flexible(
-    // child: Text(
-    // fileName.isNotEmpty ? fileName : "File",
-    // style: const TextStyle(
-    // color: Colors.black,
-    // fontWeight: FontWeight.w500,
-    // ),
-    // overflow: TextOverflow.ellipsis,
-    // ),
-    // ),
-    //
-    // const SizedBox(width: 6),
-    //
-    // Obx(() {
-    // final isDownloading =
-    // chat.downloadingMsgId.value.toString() ==
-    // m["PKID"]?.toString();
-    //
-    //
-    //
-    // return InkWell(
-    // onTap: () async {
-    // await chat.downloadAndOpenFile(
-    // pkMsgId: m["PKID"],
-    // companyId: widget.companyId,
-    // );
-    // },
-    // child: const Icon(
-    // Icons.download,
-    // color: Color(0xFF2e448d),
-    // ),
-    // );
-    // }),
-    // ],
-    // )
-                                        // Row(
-                                        //   mainAxisSize: MainAxisSize.min,
-                                        //   children: [
-                                        //     const Icon(Icons.insert_drive_file,
-                                        //         color: Color(0xFF2e448d)),
-                                        //     const SizedBox(width: 6),
-                                        //
-                                        //     Flexible(
-                                        //       child: Text(
-                                        //         (m["OriginalFileName"] != null &&
-                                        //             m["OriginalFileName"].toString().isNotEmpty)
-                                        //             ? m["OriginalFileName"].toString()
-                                        //             : "File",
-                                        //         style: const TextStyle(
-                                        //           color: Colors.black,
-                                        //           fontWeight: FontWeight.w500,
-                                        //         ),
-                                        //         overflow: TextOverflow.ellipsis,
-                                        //       ),
-                                        //     ),
-                                        //
-                                        //     const SizedBox(width: 6),
-                                        //     Obx(() {
-                                        //       final isDownloading =
-                                        //           chat.downloadingMsgId.value?.toString() ==
-                                        //               m["PKID"]?.toString();
-                                        //
-                                        //       return InkWell(
-                                        //         onTap: isDownloading
-                                        //             ? null
-                                        //             : () async {
-                                        //           await chat.downloadAndOpenFile(
-                                        //             pkMsgId: m["PKID"],
-                                        //             companyId: widget.companyId,
-                                        //           );
-                                        //         },
-                                        //         child: const Icon(
-                                        //           Icons.download,
-                                        //           color: Color(0xFF2e448d),
-                                        //         ),
-                                        //       );
-                                        //     }),
-                                        //     // Obx(() => InkWell(
-                                        //     //   onTap: chat.downloadingMsgId.value ==
-                                        //     //       m["PKID"]
-                                        //     //       ? null
-                                        //     //       : () async {
-                                        //     //     await chat.downloadAndOpenFile(
-                                        //     //       pkMsgId: m["PKID"],
-                                        //     //       companyId: widget.companyId,
-                                        //     //     );
-                                        //     //   },
-                                        //     //   child: chat.downloadingMsgId.value == m["PKID"]
-                                        //     //       ? const SizedBox(
-                                        //     //     height: 18,
-                                        //     //     width: 18,
-                                        //     //     child:
-                                        //     //     CircularProgressIndicator(
-                                        //     //       strokeWidth: 8,
-                                        //     //       color: Color(0xFF2e448d),
-                                        //     //     ),
-                                        //     //   )
-                                        //     //       : const Icon(
-                                        //     //     Icons.download,
-                                        //     //     color: Color(0xFF2e448d),
-                                        //     //   ),
-                                        //     // )),
-                                        //   ],
-                                        // ),
-
-
-
-                           else
-                             const SizedBox(height: 4),
-                                    if (m["isUploading"] == true)
-                                      Text(
-                                        "Uploading...",
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontStyle: FontStyle.italic,
-                                        ),
-                                      )
-                                    else
-                                      Text(
-                                        m["MsgDate"] ?? "",
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    // Text(
-                                    //   msgDate,
-                                    //   style: const TextStyle(
-                                    //     fontSize: 12,
-                                    //     color: Colors.grey,
-                                    //   ),
-                                    // ),
-                                  ],
-                                ),
-                              ),
-                              if (isLastFromSender)
-                                Positioned(
-                                  bottom: 6,
-                                  left: isMe ? null : 2,
-                                  right: isMe ? 2 : null,
-                                  child: CustomPaint(
-                                    size: const Size(12, 14),
-                                    painter: BubbleTailPainter(
-                                      isMe: isMe,
-                                      color: isMe
-                                          ? const Color(0xffbcc5ed)
-                                          .withOpacity(0.5)
-                                          : Colors.white.withOpacity(0.5),
+                                          )),
+                                        );
+                                      },
                                     ),
                                   ),
-                                ),
-                            ],
+
+                                  /// 🔹 Image counter
+                                  Positioned(
+                                    top: 12,
+                                    left: 20,
+                                    child: Obx(() => Text(
+                                      "${currentIndex.value + 1} / ${imageMessages.length}",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    )),
+                                  ),
+
+                                  /// 🔹 Rotate button
+                                  Positioned(
+                                    top: 10,
+                                    right: 110,
+                                    child: InkWell(
+                                      onTap: () {
+                                        rotationAngle.value += 1.57; // rotate 90 degree
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.6),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.rotate_right,
+                                          color: Colors.white,
+                                          size: 26,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  /// 🔹 Download button
+                                  Positioned(
+                                    top: 10,
+                                    right: 60,
+                                    child: Obx(() {
+                                      bool isDownloading = chat.downloadingMsgId.value ==
+                                          imageMessages[currentIndex.value]["PKID"];
+
+                                      return InkWell(
+                                        onTap: isDownloading
+                                            ? null
+                                            : () async {
+                                          await chat.downloadAndOpenFile(
+                                            pkMsgId:
+                                            imageMessages[currentIndex.value]["PKID"],
+                                            companyId: widget.companyId,
+                                            fileName: imageMessages[currentIndex.value]
+                                            ["OriginalFileName"],
+                                          );
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.6),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: isDownloading
+                                              ? const SizedBox(
+                                            width: 26,
+                                            height: 26,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                              : const Icon(
+                                            Icons.download,
+                                            color: Colors.white,
+                                            size: 26,
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+
+                                  /// 🔹 Close button
+                                  Positioned(
+                                    top: 10,
+                                    right: 10,
+                                    child: InkWell(
+                                      onTap: () => Get.back(),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.6),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.close,
+                                          color: Colors.white,
+                                          size: 26,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
+                          barrierColor: Colors.black87,
+                          barrierDismissible: true,
+                        );
+                        },
+
+                        /// CHAT IMAGE
+                        child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                        fileUrl,
+                        height: 180,
+                        width: 180,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                        const Icon(Icons.broken_image, size: 80),
+                        ),
+                        ),
+                        ),
+
+                        /// DOWNLOAD LOADER OVERLAY
+                        Obx(() {
+                        final isDownloading =
+                        chat.downloadingMsgId.value == m["PKID"];
+                        if (!isDownloading) return const SizedBox.shrink();
+
+                        return Container(
+                        height: 180,
+                        width: 180,
+                        decoration: BoxDecoration(
+                        color: Colors.black45,
+                        borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                        child: CircularProgressIndicator(
+                        color: Colors.white,
+                        ),
+                        ),
+                        );
+                        }),
+                        ],
+                        )
+                        //                                     GestureDetector(
+                        // onTap: () async {
+                        // await chat.downloadAndOpenFile(
+                        // pkMsgId: m["PKID"],
+                        // companyId: widget.companyId,
+                        // );
+                        // },
+                        // child: ClipRRect(
+                        // borderRadius: BorderRadius.circular(12),
+                        // child: Image.network(
+                        //   fileUrl ?? "",
+                        // height: 180,
+                        // width: 180,
+                        // fit: BoxFit.cover,
+                        // errorBuilder: (, _, _) =>
+                        // const Icon(Icons.broken_image, size: 80),
+                        // ),
+                        // ),
+                        // )
+                        else Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                        const Icon(
+                        Icons.insert_drive_file,
+                        color: Color(0xFF2e448d),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                        child: Text(
+                        fileName.isNotEmpty ? fileName : "File",
+                        style: const TextStyle(
+                        color: Colors.black,
+                        fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        ),
+                        ),
+                        const SizedBox(width: 6),
+                        Obx(() {
+                        // Check if this file is being downloaded
+                        final isDownloading =
+                        chat.downloadingMsgId.value.toString() == m["PKID"]?.toString();
+
+                        return InkWell(
+                        onTap: isDownloading
+                        ? null // Disable button while downloading
+                            : () async {
+                        await chat.downloadAndOpenFile(
+                        pkMsgId: m["PKID"],
+                        companyId: widget.companyId,
+                          fileName: m["OriginalFileName"],
+
+                        );
+                        },
+                        child: Container(
+                        width: 26,
+                        height: 26,
+                        alignment: Alignment.center,
+                        child: isDownloading
+                        ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Color(0xFF2e448d),
+                        ),
+                        )
+                            : const Icon(
+                        Icons.download,
+                        color: Color(0xFF2e448d),
+                        size: 26,
+                        ),
+                        ),
+                        );
+                        }),
+                        ],
+                        )
+                        //                                     Row(
+                        // mainAxisSize: MainAxisSize.min,
+                        // children: [
+                        // const Icon(
+                        // Icons.insert_drive_file,
+                        // color: Color(0xFF2e448d),
+                        // ),
+                        //
+                        // const SizedBox(width: 6),
+                        //
+                        // Flexible(
+                        // child: Text(
+                        // fileName.isNotEmpty ? fileName : "File",
+                        // style: const TextStyle(
+                        // color: Colors.black,
+                        // fontWeight: FontWeight.w500,
+                        // ),
+                        // overflow: TextOverflow.ellipsis,
+                        // ),
+                        // ),
+                        //
+                        // const SizedBox(width: 6),
+                        //
+                        // Obx(() {
+                        // final isDownloading =
+                        // chat.downloadingMsgId.value.toString() ==
+                        // m["PKID"]?.toString();
+                        //
+                        //
+                        //
+                        // return InkWell(
+                        // onTap: () async {
+                        // await chat.downloadAndOpenFile(
+                        // pkMsgId: m["PKID"],
+                        // companyId: widget.companyId,
+                        // );
+                        // },
+                        // child: const Icon(
+                        // Icons.download,
+                        // color: Color(0xFF2e448d),
+                        // ),
+                        // );
+                        // }),
+                        // ],
+                        // )
+                        // Row(
+                        //   mainAxisSize: MainAxisSize.min,
+                        //   children: [
+                        //     const Icon(Icons.insert_drive_file,
+                        //         color: Color(0xFF2e448d)),
+                        //     const SizedBox(width: 6),
+                        //
+                        //     Flexible(
+                        //       child: Text(
+                        //         (m["OriginalFileName"] != null &&
+                        //             m["OriginalFileName"].toString().isNotEmpty)
+                        //             ? m["OriginalFileName"].toString()
+                        //             : "File",
+                        //         style: const TextStyle(
+                        //           color: Colors.black,
+                        //           fontWeight: FontWeight.w500,
+                        //         ),
+                        //         overflow: TextOverflow.ellipsis,
+                        //       ),
+                        //     ),
+                        //
+                        //     const SizedBox(width: 6),
+                        //     Obx(() {
+                        //       final isDownloading =
+                        //           chat.downloadingMsgId.value?.toString() ==
+                        //               m["PKID"]?.toString();
+                        //
+                        //       return InkWell(
+                        //         onTap: isDownloading
+                        //             ? null
+                        //             : () async {
+                        //           await chat.downloadAndOpenFile(
+                        //             pkMsgId: m["PKID"],
+                        //             companyId: widget.companyId,
+                        //           );
+                        //         },
+                        //         child: const Icon(
+                        //           Icons.download,
+                        //           color: Color(0xFF2e448d),
+                        //         ),
+                        //       );
+                        //     }),
+                        //     // Obx(() => InkWell(
+                        //     //   onTap: chat.downloadingMsgId.value ==
+                        //     //       m["PKID"]
+                        //     //       ? null
+                        //     //       : () async {
+                        //     //     await chat.downloadAndOpenFile(
+                        //     //       pkMsgId: m["PKID"],
+                        //     //       companyId: widget.companyId,
+                        //     //     );
+                        //     //   },
+                        //     //   child: chat.downloadingMsgId.value == m["PKID"]
+                        //     //       ? const SizedBox(
+                        //     //     height: 18,
+                        //     //     width: 18,
+                        //     //     child:
+                        //     //     CircularProgressIndicator(
+                        //     //       strokeWidth: 8,
+                        //     //       color: Color(0xFF2e448d),
+                        //     //     ),
+                        //     //   )
+                        //     //       : const Icon(
+                        //     //     Icons.download,
+                        //     //     color: Color(0xFF2e448d),
+                        //     //   ),
+                        //     // )),
+                        //   ],
+                        // ),
+
+
+
+                        else
+                        const SizedBox(height: 4),
+                        if (m["isUploading"] == true)
+                        Text(
+                        "Uploading...",
+                        style: TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        ),
+                        )
+                        else  if (m["isSending"] == true)
+                          Text(
+                            "Sending...",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          )
+                        else
+                        Text(
+                        m["MsgDate"] ?? "",
+                        style: const TextStyle(fontSize: 12),
+                        ),
+                        // Text(
+                        //   msgDate,
+                        //   style: const TextStyle(
+                        //     fontSize: 12,
+                        //     color: Colors.grey,
+                        //   ),
+                        // ),
+                        ],
+                        ),
+                        ),
+                        if (isLastFromSender)
+                        Positioned(
+                        bottom: 6,
+                        left: isMe ? null : 2,
+                        right: isMe ? 2 : null,
+                        child: CustomPaint(
+                        size: const Size(12, 14),
+                        painter: BubbleTailPainter(
+                        isMe: isMe,
+                        color: isMe
+                        ? const Color(0xffbcc5ed)
+                            .withOpacity(0.5)
+                            : Colors.white.withOpacity(0.5),
+                        ),
+                        ),
+                        ),
+                        ],
+                        ),
                         );
                       },
                     );
@@ -935,12 +1557,12 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
                         radius: 24,
                         backgroundColor: const Color(0xFF5a6bb6),
                         child: IconButton(
-                          icon:  const Icon(Icons.send, color: Colors.white),
+                            icon:  const Icon(Icons.send, color: Colors.white),
 
-                          onPressed: ()async{
-                            final text = controller.text.trim();
-                            if (text.isEmpty) return;
-                            controller.clear();
+                            onPressed: ()async{
+                              final text = controller.text.trim();
+                              if (text.isEmpty) return;
+                              controller.clear();
                               await chat.sendMessage(
                                 text: text,
                                 companyId: widget.companyId,
@@ -962,6 +1584,180 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
         ),
       ),
     );
+  }
+
+}
+
+class ImagePreviewDialog extends StatelessWidget {
+  final List<File> files;
+  final Function(List<File>) onSend;
+
+  const ImagePreviewDialog({
+    super.key,
+    required this.files,
+    required this.onSend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+
+    final RxList<File> selected = files.obs;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Column(
+          children: [
+
+            /// Top Bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+
+                  IconButton(
+                    onPressed: () => Get.back(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  Obx(() => Text(
+                    "${selected.length} Selected",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )),
+                ],
+              ),
+            ),
+
+            /// Image Grid
+            Expanded(
+              child: Obx(() => GridView.builder(
+                padding: const EdgeInsets.all(10),
+                gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: selected.length,
+                itemBuilder: (context, i) {
+
+                  final file = selected[i];
+
+                  return Stack(
+                    children: [
+
+                      /// Image
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          file,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                        ),
+                      ),
+
+                      /// Remove Button
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: GestureDetector(
+                          onTap: () {
+                            selected.removeAt(i);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              )),
+            ),
+
+            /// Send Button
+            Padding(
+              padding: const EdgeInsets.all(15),
+              child: Obx(() => SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF475594),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: selected.isEmpty
+                      ? null
+                      : () {
+                    onSend(selected.toList());
+                    Get.back();
+                  },
+                  icon: const Icon(Icons.send,color: Colors.white,),
+                  label: Text("Send (${selected.length})",style: TextStyle(color: Colors.white),),
+                ),
+              )),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class FilePreviewDialog extends StatelessWidget {
+  final List<File> files;
+  final Function(List<File>) onSend;
+
+  const FilePreviewDialog({
+    super.key,
+    required this.files,
+    required this.onSend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog( shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16), ),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+      contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+      actionsPadding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      title: Row( children: [ const Icon(Icons.attach_file, color: Color(0xFF475594)),
+        const SizedBox(width: 8), Text( "Selected Files (${files.length})",
+          style: const TextStyle( fontWeight: FontWeight.bold, ), ), ], ),
+      content: SizedBox( width: double.maxFinite, height: 250,
+        child: ListView.separated( itemCount: files.length, separatorBuilder: (_, __) =>
+        const Divider(height: 1), itemBuilder: (_, i) { final fileName = files[i].path.split('/').last;
+          return ListTile( contentPadding: EdgeInsets.zero, leading: Container( padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration( color: Colors.blue.withOpacity(.1), borderRadius: BorderRadius.circular(8),
+            ), child: const Icon( Icons.insert_drive_file, color: Color(0xFF475594), ), ),
+            title: Text( fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style:
+            const TextStyle(fontSize: 14), ), ); }, ), ), actions: [ TextButton(
+        style: TextButton.styleFrom( foregroundColor: Colors.grey[700], ),
+        onPressed: () => Get.back(), child: const Text("Cancel"), ),
+        ElevatedButton.icon( style: ElevatedButton.styleFrom(
+          backgroundColor: Color(0xFF475594),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          shape: RoundedRectangleBorder( borderRadius: BorderRadius.circular(8), ), ),
+          onPressed: () { onSend(files); Get.back(); }, icon: const Icon(Icons.send, size: 18,color: Colors.white,),
+          label: Text("Send (${files.length})",style: TextStyle(color: Colors.white),), ) ], );
   }
 }
 
@@ -991,154 +1787,121 @@ class BubbleTailPainter extends CustomPainter {
 }
 
 
-
-
-// import 'package:flutter/material.dart';
-// import 'package:get/get.dart';
-// import '../Controller/chatController.dart';
+// class FilePreviewDialog extends StatelessWidget {
+//   final List<File> files;
+//   final Function(List<File>) onSend;
 //
-// class ChatScreen extends StatefulWidget {
-//   final int leadId;
-//   final int companyId;
-//   final int agentId;
-//   final int productId;
-//
-//   const ChatScreen({
+//   const FilePreviewDialog({
 //     super.key,
-//     required this.leadId,
-//     required this.companyId,
-//     required this.agentId,
-//     required this.productId,
+//     required this.files,
+//     required this.onSend,
 //   });
 //
 //   @override
-//   State<ChatScreen> createState() => _ChatScreenState();
-// }
-//
-// class _ChatScreenState extends State<ChatScreen> {
-//   late ChatController chat;
-//   final textCtrl = TextEditingController();
-//   final scrollCtrl = ScrollController();
-//
-//   @override
-//   void initState() {
-//     super.initState();
-//
-//     chat = Get.put(ChatController());
-//
-//     chat.initChat(
-//       leadId: widget.leadId,
-//       companyId: widget.companyId,
-//       agentId: widget.agentId,
-//       productId: widget.productId,
+//   Widget build(BuildContext context) {
+//     return AlertDialog(
+//       title: const Text("Selected Files"),
+//       content: SizedBox(
+//         width: double.maxFinite,
+//         child: ListView.builder(
+//           itemCount: files.length,
+//           itemBuilder: (_, i) {
+//             return ListTile(
+//               leading: const Icon(Icons.insert_drive_file),
+//               title: Text(files[i].path.split('/').last),
+//             );
+//           },
+//         ),
+//       ),
+//       actions: [
+//         TextButton(
+//           onPressed: () => Get.back(),
+//           child: const Text("Cancel"),
+//         ),
+//         ElevatedButton(
+//           onPressed: () {
+//             onSend(files);
+//             Get.back();
+//           },
+//           child: Text("Send (${files.length})"),
+//         )
+//       ],
 //     );
-//
-//     ever(chat.messages, (_) => scrollBottom());
 //   }
+// }
+
+// class ImagePreviewDialog extends StatelessWidget {
+//   final List<File> files;
+//   final Function(List<File>) onSend;
 //
-//   void scrollBottom() {
-//     Future.delayed(const Duration(milliseconds: 300), () {
-//       if (scrollCtrl.hasClients) {
-//         scrollCtrl.animateTo(
-//           scrollCtrl.position.maxScrollExtent,
-//           duration: const Duration(milliseconds: 300),
-//           curve: Curves.easeOut,
-//         );
-//       }
-//     });
-//   }
-//
-//   @override
-//   void dispose() {
-//     textCtrl.dispose();
-//     scrollCtrl.dispose();
-//     super.dispose();
-//   }
+//   const ImagePreviewDialog({
+//     super.key,
+//     required this.files,
+//     required this.onSend,
+//   });
 //
 //   @override
 //   Widget build(BuildContext context) {
+//     RxList<File> selected = files.obs;
+//
 //     return Scaffold(
-//       appBar: AppBar(title: const Text("SignalR Chat")),
-//       body: Column(
-//         children: [
-//           Expanded(
-//             child: Obx(() {
-//               if (chat.loading.value) {
-//                 return const Center(child: CircularProgressIndicator());
-//               }
+//       backgroundColor: Colors.black,
+//       body: SafeArea(
+//         child: Column(
+//           children: [
 //
-//               return ListView.builder(
-//                 controller: scrollCtrl,
+//             Expanded(
+//               child: GridView.builder(
 //                 padding: const EdgeInsets.all(10),
-//                 itemCount: chat.messages.length,
-//                 itemBuilder: (context, index) {
-//                   final msg = chat.messages[index];
-//
-//                   final bool isMe = msg["isMe"] == true;
-//                   final String text = msg["text"] ?? "";
-//
-//                   return Container(
-//                     margin: const EdgeInsets.symmetric(vertical: 6),
-//                     child: Row(
-//                       mainAxisAlignment:
-//                       isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-//                       children: [
-//                         Flexible(
-//                           child: Container(
-//                             padding: const EdgeInsets.symmetric(
-//                                 vertical: 10, horizontal: 14),
-//                             constraints: BoxConstraints(
-//                               maxWidth:
-//                               MediaQuery.of(context).size.width * 0.75,
-//                             ),
-//                             decoration: BoxDecoration(
-//                               color: isMe
-//                                   ? Colors.green.shade600
-//                                   : Colors.grey.shade300,
-//                               borderRadius: BorderRadius.circular(16),
-//                             ),
-//                             child: Text(
-//                               text,
-//                               style: TextStyle(
-//                                 fontSize: 15,
-//                                 color:
-//                                 isMe ? Colors.white : Colors.black87,
-//                               ),
-//                             ),
+//                 gridDelegate:
+//                 const SliverGridDelegateWithFixedCrossAxisCount(
+//                   crossAxisCount: 3,
+//                   crossAxisSpacing: 6,
+//                   mainAxisSpacing: 6,
+//                 ),
+//                 itemCount: files.length,
+//                 itemBuilder: (context, i) {
+//                   return Stack(
+//                     children: [
+//                       Image.file(
+//                         files[i],
+//                         fit: BoxFit.cover,
+//                         width: double.infinity,
+//                       ),
+//                       Positioned(
+//                         top: 4,
+//                         right: 4,
+//                         child: GestureDetector(
+//                           onTap: () {
+//                             selected.remove(files[i]);
+//                           },
+//                           child: const Icon(
+//                             Icons.cancel,
+//                             color: Colors.white,
 //                           ),
 //                         ),
-//                       ],
-//                     ),
+//                       )
+//                     ],
 //                   );
 //                 },
-//               );
-//             }),
-//           ),
-//           Padding(
-//             padding: const EdgeInsets.all(8),
-//             child: Row(
-//               children: [
-//                 Expanded(
-//                   child: TextField(
-//                     controller: textCtrl,
-//                     decoration:
-//                     const InputDecoration(hintText: "Type message..."),
-//                   ),
-//                 ),
-//                 IconButton(
-//                   icon: const Icon(Icons.send),
-//                   onPressed: () {
-//                     if (textCtrl.text.trim().isEmpty) return;
-//
-//                    // chat.sendMessage(textCtrl.text.trim());
-//                     textCtrl.clear();
-//                   },
-//                 )
-//               ],
+//               ),
 //             ),
-//           )
-//         ],
+//
+//             /// Send Button
+//             Padding(
+//               padding: const EdgeInsets.all(15),
+//               child: ElevatedButton(
+//                 onPressed: () {
+//                   onSend(selected);
+//                   Get.back();
+//                 },
+//                 child: Text("Send (${files.length})"),
+//               ),
+//             )
+//           ],
+//         ),
 //       ),
 //     );
 //   }
 // }
+

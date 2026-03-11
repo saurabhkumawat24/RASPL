@@ -17,7 +17,7 @@ class RouteHelper  {
   static String verificationScreen = '/verificationScreen';
   static String forgetPassword = '/forgetPassword';
   static String resetPasswordView = '/resetPasswordView';
-  static String homeView = '/homeView';
+  static String homeView = '/dashboard';
   static String drawerMenu = '/drawerMenu';
   static String editProfile = '/editProfile';
   static String reloadBalance = '/reloadBalance';
