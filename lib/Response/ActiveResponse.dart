@@ -32,6 +32,7 @@ class LeadItem {
   final String assignLoginId;
   final String assignName;
   final DateTime? assignDate;
+  final DateTime? lastMessageDate;
   final String remarks;
   int unReadUserCount;
 
@@ -53,6 +54,7 @@ class LeadItem {
     required this.assignLoginId,
     required this.assignName,
     required this.assignDate,
+    required this.lastMessageDate,
     required this.remarks,
     required this.unReadUserCount,
   });
@@ -76,6 +78,7 @@ class LeadItem {
       assignLoginId: json['AssignLoginID'] ?? '',
       assignName: json['AssignName'] ?? '',
       assignDate: _parseDate(json['AssignDate']),
+      lastMessageDate: _parseDate(json['LastMessageDate']),
       remarks: json['Remarks'] ?? '',
       unReadUserCount: json['UnReadUserCount'] ?? 0,
     );

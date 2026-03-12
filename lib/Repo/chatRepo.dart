@@ -8,6 +8,8 @@ class ChatRepo {
       int leadId,
       int companyId,
       ) async {
+    print("🟡 final url URL: ${"https://chatapi.partnersras.com/api/GetLeadMessage"
+        "?FKLeadID=$leadId&FKCompanyID=$companyId"}");
     final res = await http.get(
       Uri.parse(
         "https://chatapi.partnersras.com/api/GetLeadMessage"

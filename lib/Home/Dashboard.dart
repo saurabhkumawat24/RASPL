@@ -1385,7 +1385,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> with RouteAware
 
                                   Text(
                                     DateFormat("dd MMM yyyy hh:mm a")
-                                        .format(DateTime.parse(tickets.assignDate.toString())),
+                                        .format(DateTime.parse(tickets.lastMessageDate.toString())),
                                     style: theme.textTheme.titleMedium?.copyWith(
                                       fontSize: 10,
                                       color: Colors.grey,

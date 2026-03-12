@@ -595,6 +595,11 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
                         final String msgDate =
                             m["MsgDate"]?.toString() ?? "";
 
+                        final String fromUserName =
+                            m["FromUserName"]?.toString() ?? "";
+                        final String toUserName =
+                            m["ToUserName"]?.toString() ?? "";
+
                         final bool isLastFromSender =
                             i == chat.messages.length - 1 ||
                                 chat.messages[i + 1]["FromUserType"] != fromType;
@@ -657,7 +662,14 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
                                 crossAxisAlignment:
                                 CrossAxisAlignment.start,
                                 children: [
-                                if (msgType == "TEXT")
+                                  Text(
+                                    fromUserName,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                    SizedBox(
+                                      height: 2,
+                                    ),
+                                    if (msgType == "TEXT")
                             GestureDetector(
                             onTap: () {
                           if (msgText.contains("http")) {
@@ -1249,7 +1261,22 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
                         // ),
                         // ),
                         // )
-                        else Row(
+                        else
+                        Obx(() {
+                        final isDownloading =
+                        chat.downloadingMsgId.value.toString() == m["PKID"]?.toString();
+
+                        return GestureDetector(
+                        onTap: isDownloading
+                        ? null
+                            : () async {
+                        await chat.downloadAndOpenFile(
+                        pkMsgId: m["PKID"],
+                        companyId: widget.companyId,
+                        fileName: m["OriginalFileName"],
+                        );
+                        },
+                        child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                         const Icon(
@@ -1268,23 +1295,8 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
                         ),
                         ),
                         const SizedBox(width: 6),
-                        Obx(() {
-                        // Check if this file is being downloaded
-                        final isDownloading =
-                        chat.downloadingMsgId.value.toString() == m["PKID"]?.toString();
 
-                        return InkWell(
-                        onTap: isDownloading
-                        ? null // Disable button while downloading
-                            : () async {
-                        await chat.downloadAndOpenFile(
-                        pkMsgId: m["PKID"],
-                        companyId: widget.companyId,
-                          fileName: m["OriginalFileName"],
-
-                        );
-                        },
-                        child: Container(
+                        Container(
                         width: 26,
                         height: 26,
                         alignment: Alignment.center,
@@ -1303,11 +1315,11 @@ class _WhatsAppChatPageState extends State<WhatsAppChatPage> {
                         size: 26,
                         ),
                         ),
-                        );
-                        }),
                         ],
-                        )
-                        //                                     Row(
+                        ),
+                        );
+                        })
+                                    //                                     Row(
                         // mainAxisSize: MainAxisSize.min,
                         // children: [
                         // const Icon(

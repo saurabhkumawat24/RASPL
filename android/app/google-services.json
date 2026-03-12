@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "768901630750",
-    "project_id": "partnersras-2b13c",
-    "storage_bucket": "partnersras-2b13c.firebasestorage.app"
+    "project_number": "414065086936",
+    "project_id": "raspl-55259",
+    "storage_bucket": "raspl-55259.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:768901630750:android:fa23d045292e07d5da570f",
+        "mobilesdk_app_id": "1:414065086936:android:1bb1f7292fd6ecc89e62ad",
         "android_client_info": {
           "package_name": "com.insurence.insurence_crm"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBb_9lISpc5K8yt_nn-rfXksFYrrKzWK3I"
+          "current_key": "AIzaSyBm_ynKaCODrLT5hiRY4vguPuUoRt9vF44"
         }
       ],
       "services": {
