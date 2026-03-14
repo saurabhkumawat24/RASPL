@@ -401,6 +401,32 @@ class _ClosechatState extends State<Closechat> {
           ),
         ),
       ),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.all(10),
+        color: Colors.white,
+        child: SizedBox(
+          width: double.infinity,
+          height: 50,
+          child: ElevatedButton(
+            onPressed: () {
+              authController.leadReopenFun(widget.agentId,widget.leadId.toString());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF202f66),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              "Reopen Request",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+      ),
       body: SafeArea(
         child: Stack(
           clipBehavior: Clip.none,

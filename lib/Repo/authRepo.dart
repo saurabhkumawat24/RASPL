@@ -5,6 +5,7 @@ import 'package:get/get_connect/http/src/response/response.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Response/ActiveResponse.dart';
 import '../Response/SearchLeadResponse.dart';
+import '../Response/lead_reopen_model.dart';
 import '../api/api.dart';
 import '../api/api_client.dart';
 import '../util/appContants.dart';
@@ -99,7 +100,8 @@ class AuthRepo{
     required int fKCompanyID,
     required int fKProductID,
     required String leadStatus,
-  }) async {
+  }) async
+  {
     try {
       final queryParams = {
         "LeadID": leadID,
@@ -136,7 +138,42 @@ class AuthRepo{
     return null;
   }
 
+  Future<LeadReopenModel?> leadReopen({
+    required int fkUserId,
+    required String fkLeadID,
+  }) async
+  {
+    try {
+      final queryParams = {
+        "FKLeadID": fkLeadID.toString(),
+        "FKUserID": fkUserId.toString(),
+      };
 
+      final url = Uri.https(
+        "chatapi.partnersras.com",
+        "/api/ReopenLeadRequest",
+        queryParams,
+      );
+
+      print("📤 FINAL URL: $url");
+
+      final response = await http.get(
+        url,
+        headers: {"ApiToken": ApiUrls.apiToken},
+      )
+          .timeout(const Duration(seconds: 15));
+
+      print("📥 STATUS: ${response.statusCode}");
+
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        return LeadReopenModel.fromJson(jsonDecode(response.body));
+      }
+    } catch (e) {
+      print("❌ FetchLeads Error: $e");
+    }
+
+    return null;
+  }
 
 
 

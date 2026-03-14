@@ -243,6 +243,24 @@ class AuthController extends GetxController {
       isLoadings1.value = false;
     }
   }
+  Future<void> leadReopenFun(
+      int userId,
+      String leadID,
+      )
+  async {
+    try {
+      final response = await authRepo.leadReopen(
+        fkUserId: userId,
+        fkLeadID: leadID
+      );
+
+      if (response != null) {
+        showCustomSnackBar('Your request was sent successfully.',getXSnackBar: true,isError: false);
+      }
+    } catch (e) {
+      print("❌ Controller Error: $e");
+    }
+  }
 
   RxInt searchTrigger = 0.obs;
 
